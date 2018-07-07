@@ -1,0 +1,6 @@
+[package]
+name = "rdurian"
+version = "0.1.0"
+authors = ["Russell Blickhan <rwblickhan@gmail.com>"]
+
+[dependencies]
