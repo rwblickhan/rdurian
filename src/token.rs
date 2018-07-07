@@ -1,3 +1,4 @@
+#[derive(Debug, PartialEq)]
 pub struct Token {
     pub token_type: TokenType,
     pub literal: Option<TokenLiteral>,
@@ -10,6 +11,7 @@ impl Token {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum TokenType {
     // Delimiters
     Comma, LeftBrace, RightBrace, LeftParen, RightParen,
@@ -36,6 +38,7 @@ pub enum TokenType {
     EOL, EOF
 }
 
+#[derive(Debug, PartialEq)]
 pub enum TokenLiteral {
     Bool(bool),
     Int(i32),
