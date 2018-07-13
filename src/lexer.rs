@@ -1,16 +1,16 @@
-use std::iter::Peekable;
 use std::str::Chars;
 use token::*;
 
 pub struct Lexer<'a> {
-    iter: Peekable<Chars<'a>>,
+    iter: Chars<'a>,
     curr_line: TokenLine,
+    unused_lookahead: Option<char>,
 }
 
 impl<'a> Lexer<'a> {
     pub fn new(source: &'a str) -> Lexer<'a> {
-        let iter = source.chars().peekable();
-        Lexer { iter, curr_line: 0 }
+        let iter = source.chars();
+        Lexer { iter, curr_line: 0, unused_lookahead: None }
     }
 }
 
@@ -29,47 +29,51 @@ impl<'a> Lexer<'a> {
             '*' => Some(Token::new(TokenType::Star, None, self.curr_line)),
             '/' => Some(Token::new(TokenType::Slash, None, self.curr_line)),
             '=' => {
-                if let None = self.iter.peek() {
-                    return Some(Token::new(TokenType::Equal, None, self.curr_line));
-                }
-                if self.iter.peek()?.eq(&'=') {
-                    self.iter.next();
-                    Some(Token::new(TokenType::EqualEqual, None, self.curr_line))
-                } else {
-                    Some(Token::new(TokenType::Equal, None, self.curr_line))
+                match self.iter.next() {
+                    None => Some(Token::new(TokenType::Equal, None, self.curr_line)),
+                    Some(ch) => match ch {
+                        '=' => Some(Token::new(TokenType::EqualEqual, None, self.curr_line)),
+                        _ => {
+                            self.unused_lookahead = Some(ch);
+                            Some(Token::new(TokenType::Equal, None, self.curr_line))
+                        }
+                    }
                 }
             }
             '!' => {
-                if let None = self.iter.peek() {
-                    return Some(Token::new(TokenType::Bang, None, self.curr_line));
-                }
-                if self.iter.peek()?.eq(&'=') {
-                    self.iter.next();
-                    Some(Token::new(TokenType::BangEqual, None, self.curr_line))
-                } else {
-                    Some(Token::new(TokenType::Bang, None, self.curr_line))
+                match self.iter.next() {
+                    None => Some(Token::new(TokenType::Bang, None, self.curr_line)),
+                    Some(ch) => match ch {
+                        '=' => Some(Token::new(TokenType::BangEqual, None, self.curr_line)),
+                        _ => {
+                            self.unused_lookahead = Some(ch);
+                            Some(Token::new(TokenType::Bang, None, self.curr_line))
+                        }
+                    }
                 }
             }
             '>' => {
-                if let None = self.iter.peek() {
-                    return Some(Token::new(TokenType::Greater, None, self.curr_line));
-                }
-                if self.iter.peek()?.eq(&'=') {
-                    self.iter.next();
-                    Some(Token::new(TokenType::GreaterEqual, None, self.curr_line))
-                } else {
-                    Some(Token::new(TokenType::Greater, None, self.curr_line))
+                match self.iter.next() {
+                    None => Some(Token::new(TokenType::Greater, None, self.curr_line)),
+                    Some(ch) => match ch {
+                        '=' => Some(Token::new(TokenType::GreaterEqual, None, self.curr_line)),
+                        _ => {
+                            self.unused_lookahead = Some(ch);
+                            Some(Token::new(TokenType::Greater, None, self.curr_line))
+                        }
+                    }
                 }
             }
             '<' => {
-                if let None = self.iter.peek() {
-                    return Some(Token::new(TokenType::Lesser, None, self.curr_line));
-                }
-                if self.iter.peek()?.eq(&'=') {
-                    self.iter.next();
-                    Some(Token::new(TokenType::LesserEqual, None, self.curr_line))
-                } else {
-                    Some(Token::new(TokenType::Lesser, None, self.curr_line))
+                match self.iter.next() {
+                    None => Some(Token::new(TokenType::Lesser, None, self.curr_line)),
+                    Some(ch) => match ch {
+                        '=' => Some(Token::new(TokenType::LesserEqual, None, self.curr_line)),
+                        _ => {
+                            self.unused_lookahead = Some(ch);
+                            Some(Token::new(TokenType::Lesser, None, self.curr_line))
+                        }
+                    }
                 }
             }
             '\n' => {
@@ -77,77 +81,97 @@ impl<'a> Lexer<'a> {
                 Some(Token::new(TokenType::EOL, None, self.curr_line))
             }
             '\r' => {
-                if self.iter.peek()?.eq(&'\n') {
-                    self.curr_line = self.curr_line + 1;
-                    Some(Token::new(TokenType::EOL, None, self.curr_line))
-                } else {
-                    None
+                match self.iter.next() {
+                    None => Some(Token::new(TokenType::SyntaxError,
+                                            Some(TokenLiteral::Error(
+                                                "\\r line terminator is currently unsupported by Durian".to_string())),
+                                            self.curr_line)),
+                    Some(ch) => match ch {
+                        '\n' => {
+                            self.curr_line = self.curr_line + 1;
+                            Some(Token::new(TokenType::EOL, None, self.curr_line))
+                        }
+                        _ => {
+                            self.unused_lookahead = Some(ch);
+                            Some(Token::new(TokenType::SyntaxError,
+                                            Some(TokenLiteral::Error(
+                                                "\\r line terminator is currently unsupported by Durian".to_string())),
+                                            self.curr_line))
+                        }
+                    }
                 }
             }
             '"' => {
                 let mut lit = String::new();
-                if let None = self.iter.peek() {
-                    // TODO syntax error: unterminated string
-                    return None;
-                }
-                while !self.iter.peek()?.eq(&'"') {
-                    lit.push(self.iter.next()?);
-                    if let None = self.iter.peek() {
-                        // TODO syntax error: unterminated string
-                        return None;
+                while let Some(ch) = self.iter.next() {
+                    match ch {
+                        '"' => return Some(Token::new(TokenType::String,
+                                                      Some(TokenLiteral::String(lit)),
+                                                      self.curr_line)),
+                        _ => lit.push(ch)
                     }
                 }
-                Some(Token::new(TokenType::String,
-                                Some(TokenLiteral::String(lit)),
+                Some(Token::new(TokenType::SyntaxError,
+                                Some(TokenLiteral::Error("Unterminated string literal".to_string())),
                                 self.curr_line))
             }
             _ => {
                 let mut lit = String::new();
                 lit.push(c);
                 if c.is_digit(10) {
-                    if let None = self.iter.peek() {
-                        return Some(Token::new(TokenType::Integer,
-                                               Some(TokenLiteral::Int(lit.parse().unwrap())),
-                                               self.curr_line));
-                    }
-                    while self.iter.peek()?.is_digit(10) {
-                        lit.push(self.iter.next()?);
-                        if let None = self.iter.peek() {
+                    while let Some(ch) = self.iter.next() {
+                        if ch.is_digit(10) {
+                            lit.push(ch);
+                        } else {
+                            self.unused_lookahead = Some(ch);
                             break;
                         }
                     }
-                    if let None = self.iter.peek() {
-                        return Some(Token::new(TokenType::Integer,
-                                               Some(TokenLiteral::Int(lit.parse().unwrap())),
-                                               self.curr_line));
-                    }
-                    if self.iter.peek()?.eq(&'.') {
-                        lit.push(self.iter.next()?);
-                        while self.iter.peek()?.is_digit(10) {
-                            lit.push(self.iter.next()?);
-                            if let None = self.iter.peek() {
-                                break;
+
+                    if let Some(lookahead) = self.unused_lookahead {
+                        if lookahead.eq(&'.') {
+                            lit.push(lookahead);
+                            match self.iter.next() {
+                                None => return Some(Token::new(TokenType::SyntaxError,
+                                                               Some(TokenLiteral::Error(
+                                                                   "Floating point literal missing fractional part".to_string())),
+                                                               self.curr_line)),
+                                Some(ch) => {
+                                    if !ch.is_digit(10) {
+                                        self.unused_lookahead = Some(ch);
+                                        return Some(Token::new(TokenType::SyntaxError,
+                                                               Some(TokenLiteral::Error(
+                                                                   "Floating point literal missing fractional part".to_string())),
+                                                               self.curr_line));
+                                    }
+                                    lit.push(ch);
+                                }
                             }
+                            while let Some(ch) = self.iter.next() {
+                                if ch.is_digit(10) {
+                                    lit.push(ch);
+                                } else {
+                                    self.unused_lookahead = Some(ch);
+                                    break;
+                                }
+                            }
+                            return Some(Token::new(TokenType::Float,
+                                                   Some(TokenLiteral::Float(lit.parse().unwrap())),
+                                                   self.curr_line));
                         }
-                        return Some(Token::new(TokenType::Float,
-                                               Some(TokenLiteral::Float(lit.parse().unwrap())),
-                                               self.curr_line));
-                    } else {
-                        return Some(Token::new(TokenType::Integer,
-                                               Some(TokenLiteral::Int(lit.parse().unwrap())),
-                                               self.curr_line));
                     }
+
+                    return Some(Token::new(TokenType::Integer,
+                                           Some(TokenLiteral::Int(lit.parse().unwrap())),
+                                           self.curr_line));
                 } else if c.is_alphabetic() {
-                    if let None = self.iter.peek() {
-                        return Some(Token::new(TokenType::Identifier,
-                                               Some(TokenLiteral::Identifier(lit)),
-                                               self.curr_line));
-                    }
-                    while self.iter.peek()?.is_alphabetic() ||
-                        self.iter.peek()?.is_digit(10) ||
-                        self.iter.peek()?.eq(&'_') {
-                        lit.push(self.iter.next()?);
-                        if let None = self.iter.peek() {
+                    while let Some(ch) = self.iter.next() {
+                        if ch.is_alphabetic() ||
+                            ch.is_digit(10) ||
+                            ch.eq(&'_') {
+                            lit.push(ch)
+                        } else {
+                            self.unused_lookahead = Some(ch);
                             break;
                         }
                     }
@@ -207,7 +231,9 @@ impl<'a> Lexer<'a> {
                                            Some(TokenLiteral::Identifier(lit)),
                                            self.curr_line));
                 }
-                None
+                Some(Token::new(TokenType::SyntaxError,
+                                Some(TokenLiteral::Error(format!("Unexpected input: {}", c))),
+                                self.curr_line))
             }
         }
     }
@@ -217,10 +243,15 @@ impl<'a> Iterator for Lexer<'a> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Token> {
-        match self.iter.next() {
-            Some(c) => self.match_token(c),
-            None => None
-        }
+        let c = match self.unused_lookahead {
+            Some(c) => c,
+            None => match self.iter.next() {
+                Some(c) => c,
+                None => return None
+            }
+        };
+        self.unused_lookahead = None;
+        self.match_token(c)
     }
 }
 

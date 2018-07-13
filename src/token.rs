@@ -35,7 +35,7 @@ pub enum TokenType {
     Print, Scan, Err,
 
     // Control tokens
-    EOL, EOF
+    EOL, EOF, SyntaxError
 }
 
 #[derive(Debug, PartialEq)]
@@ -44,7 +44,8 @@ pub enum TokenLiteral {
     Int(i32),
     Float(f64),
     String(String),
-    Identifier(String)
+    Identifier(String),
+    Error(String)
 }
 
 pub type TokenLine = u32;
