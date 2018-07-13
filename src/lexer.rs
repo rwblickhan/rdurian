@@ -78,7 +78,7 @@ impl<'a> Lexer<'a> {
             }
             '\n' => {
                 self.curr_line = self.curr_line + 1;
-                Some(Token::new(TokenType::EOL, None, self.curr_line))
+                Some(Token::new(TokenType::EOL, None, self.curr_line - 1))
             }
             '\r' => {
                 match self.iter.next() {
@@ -89,7 +89,7 @@ impl<'a> Lexer<'a> {
                     Some(ch) => match ch {
                         '\n' => {
                             self.curr_line = self.curr_line + 1;
-                            Some(Token::new(TokenType::EOL, None, self.curr_line))
+                            Some(Token::new(TokenType::EOL, None, self.curr_line - 1))
                         }
                         _ => {
                             self.unused_lookahead = Some(ch);
@@ -295,6 +295,121 @@ mod tests {
     }
 
     #[test]
+    fn test_single_ampersand() {
+        let mut lexer = Lexer::new(&"&");
+        assert_eq!(Token::new(TokenType::Ampersand, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_single_plus() {
+        let mut lexer = Lexer::new(&"+");
+        assert_eq!(Token::new(TokenType::Plus, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_single_minus() {
+        let mut lexer = Lexer::new(&"-");
+        assert_eq!(Token::new(TokenType::Minus, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_single_star() {
+        let mut lexer = Lexer::new(&"*");
+        assert_eq!(Token::new(TokenType::Star, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_single_slash() {
+        let mut lexer = Lexer::new(&"/");
+        assert_eq!(Token::new(TokenType::Slash, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_single_equal() {
+        let mut lexer = Lexer::new(&"=");
+        assert_eq!(Token::new(TokenType::Equal, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_single_equal_equal() {
+        let mut lexer = Lexer::new(&"==");
+        assert_eq!(Token::new(TokenType::EqualEqual, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_single_greater() {
+        let mut lexer = Lexer::new(&">");
+        assert_eq!(Token::new(TokenType::Greater, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_single_greater_equal() {
+        let mut lexer = Lexer::new(&">=");
+        assert_eq!(Token::new(TokenType::GreaterEqual, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_single_lesser() {
+        let mut lexer = Lexer::new(&"<");
+        assert_eq!(Token::new(TokenType::Lesser, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_single_lesser_equal() {
+        let mut lexer = Lexer::new(&"<=");
+        assert_eq!(Token::new(TokenType::LesserEqual, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_single_bang() {
+        let mut lexer = Lexer::new(&"!");
+        assert_eq!(Token::new(TokenType::Bang, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_single_bang_equal() {
+        let mut lexer = Lexer::new(&"!=");
+        assert_eq!(Token::new(TokenType::BangEqual, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_single_cr_newline() {
+        let mut lexer = Lexer::new(&"\n");
+        assert_eq!(Token::new(TokenType::EOL, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_single_crlf_newline() {
+        let mut lexer = Lexer::new(&"\r\n");
+        assert_eq!(Token::new(TokenType::EOL, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_single_invalid_newline() {
+        let mut lexer = Lexer::new(&"\r");
+        assert_eq!(Token::new(TokenType::SyntaxError,
+                              Some(TokenLiteral::Error(
+                                  "\\r line terminator is currently unsupported by Durian".to_string())),
+                              0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
     fn test_and() {
         let mut lexer = Lexer::new(&"and");
         assert_eq!(Token::new(TokenType::And, None, 0),
@@ -302,10 +417,147 @@ mod tests {
     }
 
     #[test]
-    fn test_string_literal() {
+    fn test_or() {
+        let mut lexer = Lexer::new(&"or");
+        assert_eq!(Token::new(TokenType::Or, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_def() {
+        let mut lexer = Lexer::new(&"def");
+        assert_eq!(Token::new(TokenType::Def, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_let() {
+        let mut lexer = Lexer::new(&"let");
+        assert_eq!(Token::new(TokenType::Let, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_if() {
+        let mut lexer = Lexer::new(&"if");
+        assert_eq!(Token::new(TokenType::If, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_else() {
+        let mut lexer = Lexer::new(&"else");
+        assert_eq!(Token::new(TokenType::Else, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_elif() {
+        let mut lexer = Lexer::new(&"elif");
+        assert_eq!(Token::new(TokenType::Elif, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_while() {
+        let mut lexer = Lexer::new(&"while");
+        assert_eq!(Token::new(TokenType::While, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_return() {
+        let mut lexer = Lexer::new(&"return");
+        assert_eq!(Token::new(TokenType::Return, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_next() {
+        let mut lexer = Lexer::new(&"next");
+        assert_eq!(Token::new(TokenType::Next, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_break() {
+        let mut lexer = Lexer::new(&"break");
+        assert_eq!(Token::new(TokenType::Break, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_print() {
+        let mut lexer = Lexer::new(&"print");
+        assert_eq!(Token::new(TokenType::Print, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_scan() {
+        let mut lexer = Lexer::new(&"scan");
+        assert_eq!(Token::new(TokenType::Scan, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_err() {
+        let mut lexer = Lexer::new(&"err");
+        assert_eq!(Token::new(TokenType::Err, None, 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_int_lit() {
+        let mut lexer = Lexer::new(&"10");
+        assert_eq!(Token::new(TokenType::Integer, Some(TokenLiteral::Int(10)), 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_float_lit() {
+        let mut lexer = Lexer::new(&"10.0");
+        assert_eq!(Token::new(TokenType::Float, Some(TokenLiteral::Float(10.0)), 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_true_lit() {
+        let mut lexer = Lexer::new(&"True");
+        assert_eq!(Token::new(TokenType::True, Some(TokenLiteral::Bool(true)), 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_false_lit() {
+        let mut lexer = Lexer::new(&"False");
+        assert_eq!(Token::new(TokenType::False, Some(TokenLiteral::Bool(false)), 0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_string_lit() {
         let mut lexer = Lexer::new(&"\"Hi, this is a string.\"");
         assert_eq!(Token::new(TokenType::String,
                               Some(TokenLiteral::String("Hi, this is a string.".to_string())),
+                              0),
+                   lexer.next().unwrap());
+    }
+
+    #[test]
+    fn test_unterminated_string_lit() {
+        let mut lexer = Lexer::new(&"\"Hi, this is a string.");
+        assert_eq!(Token::new(TokenType::SyntaxError,
+                              Some(TokenLiteral::Error("Unterminated string literal".to_string())),
+                              0),
+        lexer.next().unwrap());
+    }
+
+    #[test]
+    fn test_ident() {
+        let mut lexer = Lexer::new(&"a_ident10");
+        assert_eq!(Token::new(TokenType::Identifier,
+                              Some(TokenLiteral::Identifier("a_ident10".to_string())),
                               0),
                    lexer.next().unwrap());
     }
