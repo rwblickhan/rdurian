@@ -33,22 +33,16 @@ impl<'a> Parser<'a> {
             TokenType::Else => Err(SyntaxError::new("Found else with no matching if.".to_string(),
                                                     curr_token)),
             TokenType::While => {
-                let cond = match self.parse_expr() {
-                    Err(e) => return Err(e),
-                    Ok(opt_expr) => match opt_expr {
-                        None => return Err(SyntaxError::new("While statement missing condition expression.".to_string(),
-                                                            curr_token)),
-                        Some(expr) => expr
-                    }
+                let cond = match self.parse_expr()? {
+                    None => return Err(SyntaxError::new("While statement missing condition expression.".to_string(),
+                                                        curr_token)),
+                    Some(expr) => expr
                 };
 
-                match self.parse_block_stmt() {
-                    Err(e) => return Err(e),
-                    Ok(opt_stmt) => match opt_stmt {
-                        None => return Err(SyntaxError::new("While statement missing body.".to_string(),
-                                                            curr_token)),
-                        Some(stmt) => Ok(Some(Stmt::While { cond: Box::new(cond), body: Box::new(stmt) }))
-                    }
+                match self.parse_block_stmt()? {
+                    None => return Err(SyntaxError::new("While statement missing body.".to_string(),
+                                                        curr_token)),
+                    Some(stmt) => Ok(Some(Stmt::While { cond: Box::new(cond), body: Box::new(stmt) }))
                 }
             }
             TokenType::Next => {
@@ -58,13 +52,10 @@ impl<'a> Parser<'a> {
                 Ok(Some(Stmt::Break))
             }
             TokenType::Let => {
-                let ident = match self.parse_ident() {
-                    Err(e) => return Err(e),
-                    Ok(opt_expr) => match opt_expr {
-                        None => return Err(SyntaxError::new("Let statement missing identifier.".to_string(),
-                                                            curr_token)),
-                        Some(expr) => expr
-                    }
+                let ident = match self.parse_ident()? {
+                    None => return Err(SyntaxError::new("Let statement missing identifier.".to_string(),
+                                                        curr_token)),
+                    Some(expr) => expr
                 };
                 let token = match self.lexer.next() {
                     None => return Err(SyntaxError::new("Let statement missing =.".to_string(), curr_token)),
@@ -74,13 +65,10 @@ impl<'a> Parser<'a> {
                     return Err(SyntaxError::new("Let statement identifier followed by invalid token.".to_string(),
                                                 token));
                 }
-                match self.parse_expr() {
-                    Err(e) => return Err(e),
-                    Ok(opt_expr) => match opt_expr {
-                        None => return Err(SyntaxError::new("Let statement missing assignment expression.".to_string(),
-                                                            curr_token)),
-                        Some(expr) => Ok(Some(Stmt::Let { ident: Box::new(ident), expr: Box::new(expr) }))
-                    }
+                match self.parse_expr()? {
+                    None => return Err(SyntaxError::new("Let statement missing assignment expression.".to_string(),
+                                                        curr_token)),
+                    Some(expr) => Ok(Some(Stmt::Let { ident: Box::new(ident), expr: Box::new(expr) }))
                 }
             }
             TokenType::Print => {
@@ -94,33 +82,24 @@ impl<'a> Parser<'a> {
                 }
             }
             TokenType::Err => {
-                match self.parse_expr() {
-                    Err(e) => return Err(e),
-                    Ok(opt_expr) => match opt_expr {
-                        None => return Err(SyntaxError::new("Err statement missing expression.".to_string(),
-                                                            curr_token)),
-                        Some(expr) => Ok(Some(Stmt::Err { expr: Box::new(expr) }))
-                    }
+                match self.parse_expr()? {
+                    None => return Err(SyntaxError::new("Err statement missing expression.".to_string(),
+                                                        curr_token)),
+                    Some(expr) => Ok(Some(Stmt::Err { expr: Box::new(expr) }))
                 }
             }
             TokenType::Scan => {
-                match self.parse_ident() {
-                    Err(e) => return Err(e),
-                    Ok(opt_expr) => match opt_expr {
-                        None => return Err(SyntaxError::new("Scan statement missing identifier.".to_string(),
-                                                            curr_token)),
-                        Some(expr) => Ok(Some(Stmt::Scan { ident: Box::new(expr) }))
-                    }
+                match self.parse_ident()? {
+                    None => return Err(SyntaxError::new("Scan statement missing identifier.".to_string(),
+                                                        curr_token)),
+                    Some(expr) => Ok(Some(Stmt::Scan { ident: Box::new(expr) }))
                 }
             }
             TokenType::Return => {
-                match self.parse_expr() {
-                    Err(e) => return Err(e),
-                    Ok(opt_expr) => match opt_expr {
-                        None => return Err(SyntaxError::new("Return statement missing expression.".to_string(),
-                                                            curr_token)),
-                        Some(expr) => Ok(Some(Stmt::Return { expr: Box::new(expr) }))
-                    }
+                match self.parse_expr()? {
+                    None => return Err(SyntaxError::new("Return statement missing expression.".to_string(),
+                                                        curr_token)),
+                    Some(expr) => Ok(Some(Stmt::Return { expr: Box::new(expr) }))
                 }
             }
             TokenType::Def => {
@@ -147,26 +126,20 @@ impl<'a> Parser<'a> {
                         continue;
                     }
                     if curr_token.token_type.eq(&TokenType::RightParen) {
-                        match self.parse_block_stmt() {
-                            Err(e) => return Err(e),
-                            Ok(opt_stmt) => match opt_stmt {
-                                None => return Err(SyntaxError::new("While statement missing body.".to_string(),
-                                                                    curr_token)),
-                                Some(stmt) => return Ok(Some(Stmt::FnDecl {
-                                    ident: Box::new(ident),
-                                    params,
-                                    body: Box::new(stmt),
-                                }))
-                            }
+                        match self.parse_block_stmt()? {
+                            None => return Err(SyntaxError::new("While statement missing body.".to_string(),
+                                                                curr_token)),
+                            Some(stmt) => return Ok(Some(Stmt::FnDecl {
+                                ident: Box::new(ident),
+                                params,
+                                body: Box::new(stmt),
+                            }))
                         }
                     } else {
-                        let param = match self.parse_ident() {
-                            Err(e) => return Err(e),
-                            Ok(opt_expr) => match opt_expr {
-                                None => return Err(SyntaxError::new("Function definition parameter not a valid lvalue.".to_string(),
-                                                                    curr_token)),
-                                Some(expr) => expr
-                            }
+                        let param = match self.parse_ident()? {
+                            None => return Err(SyntaxError::new("Function definition parameter not a valid lvalue.".to_string(),
+                                                                curr_token)),
+                            Some(expr) => expr
                         };
                         params.push(Box::new(param));
                     }
@@ -175,25 +148,19 @@ impl<'a> Parser<'a> {
                                      curr_token))
             }
             _ => {
-                let expr = match self.parse_expr() {
-                    Err(e) => return Err(e),
-                    Ok(opt_expr) => match opt_expr {
-                        None => return Ok(None),
-                        Some(expr) => expr
-                    }
+                let expr = match self.parse_expr()? {
+                    None => return Ok(None),
+                    Some(expr) => expr
                 };
                 match self.lexer.next() {
                     None => Ok(Some(Stmt::Expr { expr: Box::new(expr) })),
                     Some(token) => match token.token_type {
-                        TokenType::Equal => match self.parse_expr() {
-                            Err(e) => return Err(e),
-                            Ok(opt_expr) => match opt_expr {
-                                None => return Ok(None),
-                                Some(assign) => Ok(Some(Stmt::Assign {
-                                    ident: Box::new(expr),
-                                    expr: Box::new(assign),
-                                }))
-                            }
+                        TokenType::Equal => match self.parse_expr()? {
+                            None => return Ok(None),
+                            Some(assign) => Ok(Some(Stmt::Assign {
+                                ident: Box::new(expr),
+                                expr: Box::new(assign),
+                            }))
                         },
                         _ => {
                             self.unused_lookahead = Some(token);
