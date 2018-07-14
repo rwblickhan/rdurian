@@ -25,11 +25,11 @@ pub enum Expr {
 
 pub struct SyntaxError {
     msg: String,
-    token: Token,
+    token: Option<Token>,
 }
 
 impl SyntaxError {
-    pub fn new(msg: String, token: Token) -> SyntaxError {
+    pub fn new(msg: String, token: Option<Token>) -> SyntaxError {
         SyntaxError { msg, token }
     }
 }
