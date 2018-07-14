@@ -22,7 +22,7 @@ impl<'a> Parser<'a> {
                                                  None)),
                     Some(token) => {
                         if !token.token_type.eq(&TokenType::EOL) {
-                            return Err(SyntaxError::new("No newline at end of file.".to_string(),
+                            return Err(SyntaxError::new("No newline at end of statement.".to_string(),
                                                         Some(token)));
                         }
                         Ok(Some(stmt))
@@ -269,10 +269,36 @@ impl<'a> Iterator for Parser<'a> {
         match self.parse() {
             Ok(ast) => ast,
             Err(e) => {
-                // TODO print error
+                println!("Found syntax error while parsing: {}", e.msg);
+                if let Some(offending) = e.token {
+                    println!("Offending token: {:?}", offending);
+                }
                 self.sync();
                 self.next()
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_next_stmt() {
+        let mut parser = Parser::new(Lexer::new("next\n"));
+        match parser.next().unwrap() {
+            Stmt::Next => return,
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_break_stmt() {
+        let mut parser = Parser::new(Lexer::new("break\n"));
+        match parser.next().unwrap() {
+            Stmt::Break => return,
+            _ => panic!()
         }
     }
 }

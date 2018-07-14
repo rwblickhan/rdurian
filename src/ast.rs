@@ -24,8 +24,8 @@ pub enum Expr {
 }
 
 pub struct SyntaxError {
-    msg: String,
-    token: Option<Token>,
+    pub msg: String,
+    pub token: Option<Token>,
 }
 
 impl SyntaxError {
