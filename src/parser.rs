@@ -2,6 +2,7 @@ use ast::*;
 use lexer::Lexer;
 use token::Token;
 use token::TokenType;
+use std::ops::Deref;
 
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
@@ -46,6 +47,7 @@ impl<'a> Parser<'a> {
             TokenType::SyntaxError => Err(SyntaxError::new("Syntax error while lexing.".to_string(),
                                                            Some(curr_token))),
             TokenType::EOL => self.parse_stmt(),
+            TokenType::LeftBrace => self.parse_block_stmt(false),
             TokenType::If => self.parse_if_stmt(),
             TokenType::Elif => Err(SyntaxError::new("Found elif with no matching if.".to_string(),
                                                     Some(curr_token))),
@@ -58,7 +60,7 @@ impl<'a> Parser<'a> {
                     Some(expr) => expr
                 };
 
-                match self.parse_block_stmt()? {
+                match self.parse_block_stmt(true)? {
                     None => return Err(SyntaxError::new("While statement missing body.".to_string(),
                                                         Some(curr_token))),
                     Some(stmt) => Ok(Some(Stmt::While { cond: Box::new(cond), body: Box::new(stmt) }))
@@ -146,7 +148,7 @@ impl<'a> Parser<'a> {
                         continue;
                     }
                     if curr_token.token_type.eq(&TokenType::RightParen) {
-                        match self.parse_block_stmt()? {
+                        match self.parse_block_stmt(true)? {
                             None => return Err(SyntaxError::new("While statement missing body.".to_string(),
                                                                 Some(curr_token))),
                             Some(stmt) => return Ok(Some(Stmt::FnDecl {
@@ -194,22 +196,75 @@ impl<'a> Parser<'a> {
 
     fn parse_if_stmt(&mut self) -> Result<Option<Stmt>, SyntaxError> {
         // TODO
-        Err(SyntaxError::new("Unimplemented.".to_string(), None))
+        Err(SyntaxError::new("parse_if_stmt: Unimplemented.".to_string(), None))
     }
 
-    fn parse_block_stmt(&mut self) -> Result<Option<Stmt>, SyntaxError> {
-        // TODO
-        Err(SyntaxError::new("Unimplemented.".to_string(), None))
+    fn parse_block_stmt(&mut self, check_opening_brace: bool) -> Result<Option<Stmt>, SyntaxError> {
+        if check_opening_brace {
+            let token = match self.lexer.next() {
+                None => return Err(SyntaxError::new("Expected beginning of block statement but found end of file.".to_string(),
+                                                    None)),
+                Some(token) => token
+            };
+            if !token.token_type.eq(&TokenType::LeftBrace) {
+                return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
+                                            Some(token)));
+            }
+        }
+
+        let token = match self.lexer.next() {
+            None => return Err(SyntaxError::new("Expected body of block statement but found end of file.".to_string(),
+                                                None)),
+            Some(token) => token
+        };
+        let mut stmts = Vec::new();
+        match token.token_type {
+            TokenType::EOL => {
+                // multi-line block statement
+                while let Some(stmt) = self.parse()? {
+                    match self.lexer.next() {
+                        None => return Err(SyntaxError::new("Unterminated block statement.".to_string(),
+                                                           None)), // syntax error,
+                        Some(token) => match token.token_type {
+                            TokenType::RightBrace => break,
+                            _ => stmts.push(Box::new(stmt))
+                        }
+                    }
+                }
+            }
+            _ => {
+                // one-line block statement
+                self.unused_lookahead = Some(token);
+                match self.parse_stmt()? {
+                    None => return Err(SyntaxError::new("Expected body of block statement but found end of file.".to_string(),
+                                                        None)),
+                    Some(stmt) => {
+                        stmts.push(Box::new(stmt));
+                        let token = match self.lexer.next() {
+                            None => return Err(SyntaxError::new("Unterminated block statement.".to_string(),
+                                                                None)),
+                            Some(token) => token
+                        };
+                        if !token.token_type.eq(&TokenType::RightBrace) {
+                            return Err(SyntaxError::new("Block statement missing closing brace.".to_string(),
+                                                        Some(token)));
+                        }
+                    }
+                }
+            }
+        };
+
+        Ok(Some(Stmt::Block { stmts }))
     }
 
     fn parse_expr(&mut self) -> Result<Option<Expr>, SyntaxError> {
         // TODO
-        Err(SyntaxError::new("Unimplemented.".to_string(), None))
+        Err(SyntaxError::new("parse_expr: Unimplemented.".to_string(), None))
     }
 
     fn parse_ident(&mut self) -> Result<Option<Expr>, SyntaxError> {
         // TODO
-        Err(SyntaxError::new("Unimplemented.".to_string(), None))
+        Err(SyntaxError::new("parse_ident: Unimplemented.".to_string(), None))
     }
 
     fn sync(&mut self) {
@@ -298,6 +353,21 @@ mod tests {
         let mut parser = Parser::new(Lexer::new("break\n"));
         match parser.next().unwrap() {
             Stmt::Break => return,
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_block_stmt_one_line() {
+        let mut parser = Parser::new(Lexer::new("{ next }\n"));
+        match parser.next().unwrap() {
+            Stmt::Block { stmts }  => {
+                let boxed_stmt = stmts.iter().next().unwrap();
+                match boxed_stmt.deref() {
+                    &Stmt::Next => return,
+                    _ => panic!()
+                }
+            }
             _ => panic!()
         }
     }
