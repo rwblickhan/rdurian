@@ -12,9 +12,7 @@ impl<'a> Lexer<'a> {
         let iter = source.chars();
         Lexer { iter, curr_line: 0, unused_lookahead: None }
     }
-}
 
-impl<'a> Lexer<'a> {
     fn match_token(&mut self, c: char) -> Option<Token> {
         match c {
             ' ' => self.next(),
