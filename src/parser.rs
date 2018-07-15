@@ -52,7 +52,7 @@ impl<'a> Parser<'a> {
                                                            Some(curr_token))),
             TokenType::EOL => self.parse_stmt(),
             TokenType::LeftBrace => self.parse_block_stmt(),
-            TokenType::If => self.parse_if_stmt(),
+            TokenType::If => self.parse_if_stmt(&curr_token),
             TokenType::Elif => Err(SyntaxError::new("Found elif with no matching if.".to_string(),
                                                     Some(curr_token))),
             TokenType::Else => Err(SyntaxError::new("Found else with no matching if.".to_string(),
@@ -218,9 +218,72 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_if_stmt(&mut self) -> Result<Option<Stmt>, SyntaxError> {
-        // TODO
-        Err(SyntaxError::new("parse_if_stmt: Unimplemented.".to_string(), None))
+    fn parse_if_stmt(&mut self, curr_token: &Token) -> Result<Option<Stmt>, SyntaxError> {
+        let cond = match self.parse_expr()? {
+            None => return Err(SyntaxError::new("If statement missing condition expression.".to_string(),
+                                                Some(curr_token.clone()))),
+            Some(expr) => expr
+        };
+
+        let token = match self.lexer.next() {
+            None => return Err(SyntaxError::new("Expected beginning of block statement but found end of file.".to_string(),
+                                                None)),
+            Some(token) => token
+        };
+        if !token.token_type.eq(&TokenType::LeftBrace) {
+            return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
+                                        Some(token)));
+        }
+
+        let body = match self.parse_block_stmt()? {
+            None => return Err(SyntaxError::new("If statement missing body.".to_string(),
+                                                Some(curr_token.clone()))),
+            Some(stmt) => stmt
+        };
+
+        let next_token = match self.lexer.next() {
+            None => return Ok(Some(Stmt::If { cond: Box::new(cond), true_body: Box::new(body), false_body: None })),
+            Some(token) => token
+        };
+
+        match next_token.token_type {
+            TokenType::Elif => {
+                let elif_stmt = match self.parse_if_stmt(&next_token)? {
+                    None => return Err(SyntaxError::new("Elif missing body.".to_string(), Some(next_token))),
+                    Some(stmt) => stmt
+                };
+                Ok(Some(Stmt::If {
+                    cond: Box::new(cond),
+                    true_body: Box::new(body),
+                    false_body: Some(Box::new(elif_stmt)),
+                }))
+            }
+            TokenType::Else => {
+                let token = match self.lexer.next() {
+                    None => return Err(SyntaxError::new("Expected beginning of block statement but found end of file.".to_string(),
+                                                        None)),
+                    Some(token) => token
+                };
+                if !token.token_type.eq(&TokenType::LeftBrace) {
+                    return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
+                                                Some(token)));
+                }
+
+                let false_body = match self.parse_block_stmt()? {
+                    None => return Err(SyntaxError::new("Elif missing body.".to_string(), Some(next_token))),
+                    Some(stmt) => stmt
+                };
+                Ok(Some(Stmt::If {
+                    cond: Box::new(cond),
+                    true_body: Box::new(body),
+                    false_body: Some(Box::new(false_body)),
+                }))
+            }
+            _ => {
+                self.unused_lookahead = Some(next_token);
+                Ok(Some(Stmt::If { cond: Box::new(cond), true_body: Box::new(body), false_body: None }))
+            }
+        }
     }
 
     fn parse_block_stmt(&mut self) -> Result<Option<Stmt>, SyntaxError> {
@@ -284,7 +347,7 @@ impl<'a> Parser<'a> {
                     return Ok(Some(Expr::Literal { value: token }));
                 }
                 Err(SyntaxError::new("Expected identifier.".to_string(), Some(token)))
-            },
+            }
             None => Err(SyntaxError::new("Unexpected end of input".to_string(), None)),
         }
     }
