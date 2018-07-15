@@ -3,14 +3,19 @@ use lexer::Lexer;
 use token::Token;
 use token::TokenType;
 
-pub struct Parser<'a> {
+struct Parser<'a> {
     lexer: Lexer<'a>,
     unused_lookahead: Option<Token>,
+    had_error: bool,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(lexer: Lexer<'a>) -> Parser<'a> {
-        Parser { lexer, unused_lookahead: None }
+        Parser { lexer, unused_lookahead: None, had_error: false }
+    }
+
+    pub fn had_error(&self) -> bool {
+        self.had_error
     }
 
     fn parse(&mut self) -> Result<Option<Stmt>, SyntaxError> {
@@ -330,6 +335,7 @@ impl<'a> Iterator for Parser<'a> {
                 if let Some(offending) = e.token {
                     println!("Offending token: {:?}", offending);
                 }
+                self.had_error = true;
                 self.sync();
                 self.next()
             }
@@ -392,6 +398,15 @@ mod tests {
                     _ => panic!()
                 }
             }
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_block_stmt_unterminated() {
+        let mut parser = Parser::new(Lexer::new("{\n    next\n"));
+        match parser.next() {
+            None => assert!(parser.had_error()),
             _ => panic!()
         }
     }
