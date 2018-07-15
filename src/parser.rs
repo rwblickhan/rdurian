@@ -51,7 +51,7 @@ impl<'a> Parser<'a> {
             TokenType::SyntaxError => Err(SyntaxError::new("Syntax error while lexing.".to_string(),
                                                            Some(curr_token))),
             TokenType::EOL => self.parse_stmt(),
-            TokenType::LeftBrace => self.parse_block_stmt(false),
+            TokenType::LeftBrace => self.parse_block_stmt(),
             TokenType::If => self.parse_if_stmt(),
             TokenType::Elif => Err(SyntaxError::new("Found elif with no matching if.".to_string(),
                                                     Some(curr_token))),
@@ -64,7 +64,17 @@ impl<'a> Parser<'a> {
                     Some(expr) => expr
                 };
 
-                match self.parse_block_stmt(true)? {
+                let token = match self.lexer.next() {
+                    None => return Err(SyntaxError::new("Expected beginning of block statement but found end of file.".to_string(),
+                                                        None)),
+                    Some(token) => token
+                };
+                if !token.token_type.eq(&TokenType::LeftBrace) {
+                    return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
+                                                Some(token)));
+                }
+
+                match self.parse_block_stmt()? {
                     None => return Err(SyntaxError::new("While statement missing body.".to_string(),
                                                         Some(curr_token))),
                     Some(stmt) => Ok(Some(Stmt::While { cond: Box::new(cond), body: Box::new(stmt) }))
@@ -152,7 +162,17 @@ impl<'a> Parser<'a> {
                         continue;
                     }
                     if curr_token.token_type.eq(&TokenType::RightParen) {
-                        match self.parse_block_stmt(true)? {
+                        let token = match self.lexer.next() {
+                            None => return Err(SyntaxError::new("Expected beginning of block statement but found end of file.".to_string(),
+                                                                None)),
+                            Some(token) => token
+                        };
+                        if !token.token_type.eq(&TokenType::LeftBrace) {
+                            return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
+                                                        Some(token)));
+                        }
+
+                        match self.parse_block_stmt()? {
                             None => return Err(SyntaxError::new("While statement missing body.".to_string(),
                                                                 Some(curr_token))),
                             Some(stmt) => return Ok(Some(Stmt::FnDecl {
@@ -203,19 +223,7 @@ impl<'a> Parser<'a> {
         Err(SyntaxError::new("parse_if_stmt: Unimplemented.".to_string(), None))
     }
 
-    fn parse_block_stmt(&mut self, check_opening_brace: bool) -> Result<Option<Stmt>, SyntaxError> {
-        if check_opening_brace {
-            let token = match self.lexer.next() {
-                None => return Err(SyntaxError::new("Expected beginning of block statement but found end of file.".to_string(),
-                                                    None)),
-                Some(token) => token
-            };
-            if !token.token_type.eq(&TokenType::LeftBrace) {
-                return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
-                                            Some(token)));
-            }
-        }
-
+    fn parse_block_stmt(&mut self) -> Result<Option<Stmt>, SyntaxError> {
         let token = match self.lexer.next() {
             None => return Err(SyntaxError::new("Expected body of block statement but found end of file.".to_string(),
                                                 None)),
