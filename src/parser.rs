@@ -2,7 +2,6 @@ use ast::*;
 use lexer::Lexer;
 use token::Token;
 use token::TokenType;
-use std::ops::Deref;
 
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
@@ -224,10 +223,13 @@ impl<'a> Parser<'a> {
                 while let Some(stmt) = self.parse()? {
                     match self.lexer.next() {
                         None => return Err(SyntaxError::new("Unterminated block statement.".to_string(),
-                                                           None)), // syntax error,
-                        Some(token) => match token.token_type {
-                            TokenType::RightBrace => break,
-                            _ => stmts.push(Box::new(stmt))
+                                                            None)),
+                        Some(token) => {
+                            self.unused_lookahead = Some(token.clone());
+                            stmts.push(Box::new(stmt));
+                            if token.token_type.eq(&TokenType::RightBrace) {
+                                break;
+                            }
                         }
                     }
                 }
@@ -361,10 +363,32 @@ mod tests {
     fn test_block_stmt_one_line() {
         let mut parser = Parser::new(Lexer::new("{ next }\n"));
         match parser.next().unwrap() {
-            Stmt::Block { stmts }  => {
-                let boxed_stmt = stmts.iter().next().unwrap();
-                match boxed_stmt.deref() {
+            Stmt::Block { stmts } => {
+                let stmt = &**stmts.iter().next().unwrap();
+                match stmt {
                     &Stmt::Next => return,
+                    _ => panic!()
+                }
+            }
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_block_stmt_multi_line() {
+        let mut parser = Parser::new(Lexer::new("{\n    next\n    break\n}\n"));
+        match parser.next().unwrap() {
+            Stmt::Block { stmts } => {
+                let mut iter = stmts.iter();
+                let next_stmt = &**iter.next().unwrap();
+                match next_stmt {
+                    &Stmt::Next => {
+                        let break_stmt = &**iter.next().unwrap();
+                        match break_stmt {
+                            &Stmt::Break => return,
+                            _ => panic!()
+                        }
+                    }
                     _ => panic!()
                 }
             }
