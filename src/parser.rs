@@ -225,8 +225,8 @@ impl<'a> Parser<'a> {
         match self.get_next_token(false)? {
             None => return Err(SyntaxError::new("Expected beginning of block statement but found end of file.".to_string(),
                                                 None)),
-            Some(ref token) if token.token_type.eq(&TokenType::LeftBrace) => return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
-                                                                                                         Some(token.clone()))),
+            Some(ref token) if !token.token_type.eq(&TokenType::LeftBrace) => return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
+                                                                                                          Some(token.clone()))),
             _ => ()
         };
 
@@ -662,6 +662,155 @@ mod tests {
             Some(stmt) => {
                 panic!("Found stmt: {:?}", stmt)
             }
+        }
+    }
+
+    #[test]
+    fn test_parse_if_stmt_no_false_body() {
+        let mut parse = Parser::new(Lexer::new("if a {\n    break\n}\n"));
+        match parse.next().unwrap() {
+            Stmt::If { cond, true_body, false_body } => {
+                match *cond {
+                    Expr::Identifier { ident } => {
+                        assert_eq!(ident,
+                                   Token::new(TokenType::Identifier,
+                                              Some(TokenLiteral::Identifier("a".to_string())),
+                                              0));
+                    }
+                    _ => panic!()
+                };
+                match *true_body {
+                    Stmt::Block { stmts } => {
+                        let stmt = &**stmts.iter().next().unwrap();
+                        match stmt {
+                            &Stmt::Break => (),
+                            _ => panic!()
+                        }
+                    }
+                    _ => panic!()
+                };
+                match false_body {
+                    None => return,
+                    _ => panic!()
+                };
+            }
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_multilevel_if_stmt() {
+        let mut parse = Parser::new(Lexer::new("if a {\n    break\n} elif b {\n    next\n} else {\n    break\n}\n"));
+        match parse.next().unwrap() {
+            Stmt::If { cond, true_body, false_body } => {
+                match *cond {
+                    Expr::Identifier { ident } => {
+                        assert_eq!(ident,
+                                   Token::new(TokenType::Identifier,
+                                              Some(TokenLiteral::Identifier("a".to_string())),
+                                              0));
+                    }
+                    _ => panic!()
+                };
+                match *true_body {
+                    Stmt::Block { stmts } => {
+                        let stmt = &**stmts.iter().next().unwrap();
+                        match stmt {
+                            &Stmt::Break => (),
+                            _ => panic!()
+                        }
+                    }
+                    _ => panic!()
+                };
+                match *false_body.unwrap() {
+                    Stmt::If {cond, true_body, false_body } => {
+                        match *cond {
+                            Expr::Identifier { ident } => {
+                                assert_eq!(ident,
+                                           Token::new(TokenType::Identifier,
+                                                      Some(TokenLiteral::Identifier("b".to_string())),
+                                                      2));
+                            }
+                            _ => panic!()
+                        };
+                        match *true_body {
+                            Stmt::Block { stmts } => {
+                                let stmt = &**stmts.iter().next().unwrap();
+                                match stmt {
+                                    &Stmt::Next => (),
+                                    _ => panic!()
+                                }
+                            }
+                            _ => panic!()
+                        };
+                        match *false_body.unwrap() {
+                            Stmt::Block {stmts} => {
+                                let stmt = &**stmts.iter().next().unwrap();
+                                match stmt {
+                                    &Stmt::Break => return,
+                                    _ => panic!()
+                                }
+                            }
+                            _ => panic!()
+                        }
+                    }
+                    _ => panic!()
+                }
+            }
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_elif_no_if() {
+        let mut parser = Parser::new(Lexer::new("elif {\n    break\n}\n"));
+        match parser.next() {
+            None => panic!(),
+            Some(stmt) => match stmt {
+                Stmt::Break => return,
+                _ => panic!()
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_else_no_if() {
+        let mut parser = Parser::new(Lexer::new("else {\n    break\n}\n"));
+        match parser.next() {
+            None => panic!(),
+            Some(stmt) => match stmt {
+                Stmt::Break => return,
+                _ => panic!()
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_while_stmt() {
+        let mut parser = Parser::new(Lexer::new("while a {\n    break\n}\n"));
+        match parser.next().unwrap() {
+            Stmt::While { cond, body } => {
+                match *cond {
+                    Expr::Identifier { ident } => {
+                        assert_eq!(ident,
+                                   Token::new(TokenType::Identifier,
+                                              Some(TokenLiteral::Identifier("a".to_string())),
+                                              0));
+                    }
+                    _ => panic!()
+                };
+                match *body {
+                    Stmt::Block { stmts } => {
+                        let stmt = &**stmts.iter().next().unwrap();
+                        match stmt {
+                            &Stmt::Break => return,
+                            _ => panic!()
+                        }
+                    }
+                    _ => panic!()
+                }
+            }
+            _ => panic!()
         }
     }
 
@@ -1432,8 +1581,8 @@ mod tests {
                 Expr::FnCall { ref ident, ref args } => {
                     match **ident {
                         Expr::Identifier { ref ident } => assert_eq!(ident, &Token::new(TokenType::Identifier,
-                                                                                  Some(TokenLiteral::Identifier("f".to_string())),
-                                                                                  0)),
+                                                                                        Some(TokenLiteral::Identifier("f".to_string())),
+                                                                                        0)),
                         _ => panic!()
                     }
                     let mut iter = args.iter();
@@ -1441,14 +1590,14 @@ mod tests {
                     match arg_a {
                         &Expr::Identifier { ref ident } => {
                             assert_eq!(ident, &Token::new(TokenType::Identifier,
-                                                             Some(TokenLiteral::Identifier("a".to_string())),
-                                                             0));
+                                                          Some(TokenLiteral::Identifier("a".to_string())),
+                                                          0));
                             let arg_b = &**iter.next().unwrap();
                             match arg_b {
                                 &Expr::Identifier { ref ident } => {
                                     assert_eq!(ident, &Token::new(TokenType::Identifier,
-                                                                 Some(TokenLiteral::Identifier("b".to_string())),
-                                                                 0));
+                                                                  Some(TokenLiteral::Identifier("b".to_string())),
+                                                                  0));
                                 }
                                 _ => panic!()
                             }
