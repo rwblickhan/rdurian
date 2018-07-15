@@ -35,7 +35,7 @@ impl<'a> Parser<'a> {
         match self.parse_stmt()? {
             None => Ok(None),
             Some(stmt) => {
-                match self.get_next_token(true)? {
+                match self.get_next_token(false)? {
                     Some(ref token) if !token.token_type.eq(&TokenType::EOL) => return Err(SyntaxError::new("No newline at end of statement.".to_string(),
                                                                                                             Some(token.clone()))),
                     _ => Ok(Some(stmt))
@@ -653,6 +653,17 @@ impl<'a> Iterator for Parser<'a> {
 mod tests {
     use super::*;
     use token::TokenLiteral;
+
+    #[test]
+    fn test_parse_missing_newline() {
+        let mut parser = Parser::new(Lexer::new("next"));
+        match parser.next() {
+            None => assert!(parser.had_error()),
+            Some(stmt) => {
+                panic!("Found stmt: {:?}", stmt)
+            }
+        }
+    }
 
     #[test]
     fn test_parse_next_stmt() {
