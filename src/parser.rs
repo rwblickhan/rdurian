@@ -655,7 +655,7 @@ mod tests {
     use token::TokenLiteral;
 
     #[test]
-    fn test_next_stmt() {
+    fn test_parse_next_stmt() {
         let mut parser = Parser::new(Lexer::new("next\n"));
         match parser.next().unwrap() {
             Stmt::Next => return,
@@ -664,7 +664,7 @@ mod tests {
     }
 
     #[test]
-    fn test_break_stmt() {
+    fn test_parse_break_stmt() {
         let mut parser = Parser::new(Lexer::new("break\n"));
         match parser.next().unwrap() {
             Stmt::Break => return,
@@ -673,7 +673,7 @@ mod tests {
     }
 
     #[test]
-    fn test_block_stmt_one_line() {
+    fn test_parse_block_stmt_one_line() {
         let mut parser = Parser::new(Lexer::new("{ next }\n"));
         match parser.next().unwrap() {
             Stmt::Block { stmts } => {
@@ -688,7 +688,7 @@ mod tests {
     }
 
     #[test]
-    fn test_block_stmt_multi_line() {
+    fn test_parse_block_stmt_multi_line() {
         let mut parser = Parser::new(Lexer::new("{\n    next\n    break\n}\n"));
         match parser.next().unwrap() {
             Stmt::Block { stmts } => {
@@ -710,7 +710,7 @@ mod tests {
     }
 
     #[test]
-    fn test_block_stmt_unterminated() {
+    fn test_parse_block_stmt_unterminated() {
         let mut parser = Parser::new(Lexer::new("{\n    next\n"));
         match parser.next() {
             None => assert!(parser.had_error()),
@@ -719,7 +719,7 @@ mod tests {
     }
 
     #[test]
-    fn test_identifier() {
+    fn test_parse_identifier() {
         let mut parser = Parser::new(Lexer::new("a\n"));
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
@@ -727,6 +727,726 @@ mod tests {
                                                                            Some(TokenLiteral::Identifier("a".to_string())), 0)),
                 _ => panic!()
             },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_or_expr() {
+        let mut parser = Parser::new(Lexer::new("a or b or c\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Binary { ref left, ref operator, ref right } => {
+                    if !operator.eq(&Token::new(TokenType::Or, None, 0)) {
+                        panic!()
+                    }
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("c".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                    match **left {
+                        Expr::Binary { ref left, ref operator, ref right } => {
+                            if !operator.eq(&Token::new(TokenType::Or, None, 0)) {
+                                panic!()
+                            }
+                            match **left {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
+                                                                                       Some(TokenLiteral::Identifier("a".to_string())),
+                                                                                       0)) => (),
+                                _ => panic!()
+                            };
+                            match **right {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
+                                                                                       Some(TokenLiteral::Identifier("b".to_string())),
+                                                                                       0)) => (),
+                                _ => panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_and_expr() {
+        let mut parser = Parser::new(Lexer::new("a and b and c\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Binary { ref left, ref operator, ref right } => {
+                    if !operator.eq(&Token::new(TokenType::And, None, 0)) {
+                        panic!()
+                    }
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("c".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                    match **left {
+                        Expr::Binary { ref left, ref operator, ref right } => {
+                            if !operator.eq(&Token::new(TokenType::And, None, 0)) {
+                                panic!()
+                            }
+                            match **left {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
+                                                                                       Some(TokenLiteral::Identifier("a".to_string())),
+                                                                                       0)) => (),
+                                _ => panic!()
+                            };
+                            match **right {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
+                                                                                       Some(TokenLiteral::Identifier("b".to_string())),
+                                                                                       0)) => (),
+                                _ => panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_eq_comp_expr() {
+        let mut parser = Parser::new(Lexer::new("a == b\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Binary { ref left, ref operator, ref right } => {
+                    if !operator.eq(&Token::new(TokenType::EqualEqual, None, 0)) {
+                        panic!()
+                    }
+                    match **left {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("a".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("b".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_neq_comp_expr() {
+        let mut parser = Parser::new(Lexer::new("a != b\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Binary { ref left, ref operator, ref right } => {
+                    if !operator.eq(&Token::new(TokenType::BangEqual, None, 0)) {
+                        panic!()
+                    }
+                    match **left {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("a".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("b".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_gt_comp_expr() {
+        let mut parser = Parser::new(Lexer::new("a > b\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Binary { ref left, ref operator, ref right } => {
+                    if !operator.eq(&Token::new(TokenType::Greater, None, 0)) {
+                        panic!()
+                    }
+                    match **left {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("a".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("b".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_ge_comp_expr() {
+        let mut parser = Parser::new(Lexer::new("a >= b\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Binary { ref left, ref operator, ref right } => {
+                    if !operator.eq(&Token::new(TokenType::GreaterEqual, None, 0)) {
+                        panic!()
+                    }
+                    match **left {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("a".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("b".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_lt_comp_expr() {
+        let mut parser = Parser::new(Lexer::new("a < b\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Binary { ref left, ref operator, ref right } => {
+                    if !operator.eq(&Token::new(TokenType::Lesser, None, 0)) {
+                        panic!()
+                    }
+                    match **left {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("a".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("b".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_le_comp_expr() {
+        let mut parser = Parser::new(Lexer::new("a <= b\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Binary { ref left, ref operator, ref right } => {
+                    if !operator.eq(&Token::new(TokenType::LesserEqual, None, 0)) {
+                        panic!()
+                    }
+                    match **left {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("a".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("b".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_concat_expr() {
+        let mut parser = Parser::new(Lexer::new("a & b & c\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Binary { ref left, ref operator, ref right } => {
+                    if !operator.eq(&Token::new(TokenType::Ampersand, None, 0)) {
+                        panic!()
+                    }
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("c".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                    match **left {
+                        Expr::Binary { ref left, ref operator, ref right } => {
+                            if !operator.eq(&Token::new(TokenType::Ampersand, None, 0)) {
+                                panic!()
+                            }
+                            match **left {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
+                                                                                       Some(TokenLiteral::Identifier("a".to_string())),
+                                                                                       0)) => (),
+                                _ => panic!()
+                            };
+                            match **right {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
+                                                                                       Some(TokenLiteral::Identifier("b".to_string())),
+                                                                                       0)) => (),
+                                _ => panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_add_expr() {
+        let mut parser = Parser::new(Lexer::new("a + b + c\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Binary { ref left, ref operator, ref right } => {
+                    if !operator.eq(&Token::new(TokenType::Plus, None, 0)) {
+                        panic!()
+                    }
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("c".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                    match **left {
+                        Expr::Binary { ref left, ref operator, ref right } => {
+                            if !operator.eq(&Token::new(TokenType::Plus, None, 0)) {
+                                panic!()
+                            }
+                            match **left {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
+                                                                                       Some(TokenLiteral::Identifier("a".to_string())),
+                                                                                       0)) => (),
+                                _ => panic!()
+                            };
+                            match **right {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
+                                                                                       Some(TokenLiteral::Identifier("b".to_string())),
+                                                                                       0)) => (),
+                                _ => panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_sub_expr() {
+        let mut parser = Parser::new(Lexer::new("a - b - c\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Binary { ref left, ref operator, ref right } => {
+                    if !operator.eq(&Token::new(TokenType::Minus, None, 0)) {
+                        panic!()
+                    }
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("c".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                    match **left {
+                        Expr::Binary { ref left, ref operator, ref right } => {
+                            if !operator.eq(&Token::new(TokenType::Minus, None, 0)) {
+                                panic!()
+                            }
+                            match **left {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
+                                                                                       Some(TokenLiteral::Identifier("a".to_string())),
+                                                                                       0)) => (),
+                                _ => panic!()
+                            };
+                            match **right {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
+                                                                                       Some(TokenLiteral::Identifier("b".to_string())),
+                                                                                       0)) => (),
+                                _ => panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_mul_expr() {
+        let mut parser = Parser::new(Lexer::new("a * b * c\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Binary { ref left, ref operator, ref right } => {
+                    if !operator.eq(&Token::new(TokenType::Star, None, 0)) {
+                        panic!()
+                    }
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("c".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                    match **left {
+                        Expr::Binary { ref left, ref operator, ref right } => {
+                            if !operator.eq(&Token::new(TokenType::Star, None, 0)) {
+                                panic!()
+                            }
+                            match **left {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
+                                                                                       Some(TokenLiteral::Identifier("a".to_string())),
+                                                                                       0)) => (),
+                                _ => panic!()
+                            };
+                            match **right {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
+                                                                                       Some(TokenLiteral::Identifier("b".to_string())),
+                                                                                       0)) => (),
+                                _ => panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_div_expr() {
+        let mut parser = Parser::new(Lexer::new("a / b / c\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Binary { ref left, ref operator, ref right } => {
+                    if !operator.eq(&Token::new(TokenType::Slash, None, 0)) {
+                        panic!()
+                    }
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("c".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                    match **left {
+                        Expr::Binary { ref left, ref operator, ref right } => {
+                            if !operator.eq(&Token::new(TokenType::Slash, None, 0)) {
+                                panic!()
+                            }
+                            match **left {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
+                                                                                       Some(TokenLiteral::Identifier("a".to_string())),
+                                                                                       0)) => (),
+                                _ => panic!()
+                            };
+                            match **right {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
+                                                                                       Some(TokenLiteral::Identifier("b".to_string())),
+                                                                                       0)) => (),
+                                _ => panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_plus_expr() {
+        let mut parser = Parser::new(Lexer::new("+a\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Unary { ref operator, ref right } => {
+                    if !operator.eq(&Token::new(TokenType::Plus, None, 0)) {
+                        panic!()
+                    }
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("a".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_minus_expr() {
+        let mut parser = Parser::new(Lexer::new("-a\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Unary { ref operator, ref right } => {
+                    if !operator.eq(&Token::new(TokenType::Minus, None, 0)) {
+                        panic!()
+                    }
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("a".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_negate_expr() {
+        let mut parser = Parser::new(Lexer::new("!a\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Unary { ref operator, ref right } => {
+                    if !operator.eq(&Token::new(TokenType::Bang, None, 0)) {
+                        panic!()
+                    }
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("a".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_stringify_expr() {
+        let mut parser = Parser::new(Lexer::new("&a\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Unary { ref operator, ref right } => {
+                    if !operator.eq(&Token::new(TokenType::Ampersand, None, 0)) {
+                        panic!()
+                    }
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::new(TokenType::Identifier,
+                                                     Some(TokenLiteral::Identifier("a".to_string())),
+                                                     0)) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_grouping_expr() {
+        let mut parser = Parser::new(Lexer::new("(a + b)\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Grouping { expr } => match *expr {
+                    Expr::Binary { ref left, ref operator, ref right } => {
+                        if !operator.eq(&Token::new(TokenType::Plus, None, 0)) {
+                            panic!()
+                        }
+                        match **left {
+                            Expr::Identifier { ref ident } => {
+                                if !ident.eq(&Token::new(TokenType::Identifier,
+                                                         Some(TokenLiteral::Identifier("a".to_string())),
+                                                         0)) {
+                                    panic!()
+                                }
+                            }
+                            _ => panic!()
+                        };
+                        match **right {
+                            Expr::Identifier { ref ident } => {
+                                if !ident.eq(&Token::new(TokenType::Identifier,
+                                                         Some(TokenLiteral::Identifier("b".to_string())),
+                                                         0)) {
+                                    panic!()
+                                }
+                            }
+                            _ => panic!()
+                        };
+                    }
+                    _ => panic!()
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_func_call() {
+        let mut parser = Parser::new(Lexer::new("f(a,b)\n"));
+
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::FnCall { ref ident, ref args } => {
+                    match **ident {
+                        Expr::Identifier { ref ident } => assert_eq!(ident, &Token::new(TokenType::Identifier,
+                                                                                  Some(TokenLiteral::Identifier("f".to_string())),
+                                                                                  0)),
+                        _ => panic!()
+                    }
+                    let mut iter = args.iter();
+                    let arg_a = &**iter.next().unwrap();
+                    match arg_a {
+                        &Expr::Identifier { ref ident } => {
+                            assert_eq!(ident, &Token::new(TokenType::Identifier,
+                                                             Some(TokenLiteral::Identifier("a".to_string())),
+                                                             0));
+                            let arg_b = &**iter.next().unwrap();
+                            match arg_b {
+                                &Expr::Identifier { ref ident } => {
+                                    assert_eq!(ident, &Token::new(TokenType::Identifier,
+                                                                 Some(TokenLiteral::Identifier("b".to_string())),
+                                                                 0));
+                                }
+                                _ => panic!()
+                            }
+                        }
+                        _ => panic!()
+                    }
+                }
+                _ => panic!()
+            }
             _ => panic!()
         }
     }
