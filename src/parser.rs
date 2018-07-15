@@ -336,15 +336,248 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expr(&mut self) -> Result<Option<Expr>, SyntaxError> {
-        // TODO
-        Err(SyntaxError::new("parse_expr: Unimplemented.".to_string(), None))
+        self.parse_or_expr()
+    }
+
+    fn parse_or_expr(&mut self) -> Result<Option<Expr>, SyntaxError> {
+        let mut expr = match self.parse_and_expr()? {
+            None => return Ok(None),
+            Some(expr) => expr
+        };
+        while let Some(operator) = self.lexer.next() {
+            if !operator.token_type.eq(&TokenType::Or) {
+                self.unused_lookahead = Some(operator);
+                break;
+            }
+            let right = match self.parse_and_expr()? {
+                None => return Err(SyntaxError::new("Or expression missing right side.".to_string(),
+                                                    Some(operator))),
+                Some(expr) => expr
+            };
+            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) }
+        }
+        Ok(Some(expr))
+    }
+
+
+    fn parse_and_expr(&mut self) -> Result<Option<Expr>, SyntaxError> {
+        let mut expr = match self.parse_eq_expr()? {
+            None => return Ok(None),
+            Some(expr) => expr
+        };
+        while let Some(operator) = self.lexer.next() {
+            if !operator.token_type.eq(&TokenType::And) {
+                self.unused_lookahead = Some(operator);
+                break;
+            }
+            let right = match self.parse_eq_expr()? {
+                None => return Err(SyntaxError::new("And expression missing right side.".to_string(),
+                                                    Some(operator))),
+                Some(expr) => expr
+            };
+            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) }
+        }
+        Ok(Some(expr))
+    }
+
+    fn parse_eq_expr(&mut self) -> Result<Option<Expr>, SyntaxError> {
+        let mut expr = match self.parse_comp_expr()? {
+            None => return Ok(None),
+            Some(expr) => expr
+        };
+        while let Some(operator) = self.lexer.next() {
+            if !operator.token_type.eq(&TokenType::EqualEqual) && !operator.token_type.eq(&TokenType::BangEqual) {
+                self.unused_lookahead = Some(operator);
+                break;
+            }
+            let right = match self.parse_comp_expr()? {
+                None => return Err(SyntaxError::new("Equality comparison missing right side.".to_string(),
+                                                    Some(operator))),
+                Some(expr) => expr
+            };
+            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) }
+        }
+        Ok(Some(expr))
+    }
+
+    fn parse_comp_expr(&mut self) -> Result<Option<Expr>, SyntaxError> {
+        let mut expr = match self.parse_concat_expr()? {
+            None => return Ok(None),
+            Some(expr) => expr
+        };
+        while let Some(operator) = self.lexer.next() {
+            if !operator.token_type.eq(&TokenType::GreaterEqual)
+                && !operator.token_type.eq(&TokenType::Greater)
+                && !operator.token_type.eq(&TokenType::LesserEqual)
+                && !operator.token_type.eq(&TokenType::Lesser) {
+                self.unused_lookahead = Some(operator);
+                break;
+            }
+            let right = match self.parse_concat_expr()? {
+                None => return Err(SyntaxError::new("Comparison operator missing right side.".to_string(),
+                                                    Some(operator))),
+                Some(expr) => expr
+            };
+            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) }
+        }
+        Ok(Some(expr))
+    }
+
+    fn parse_concat_expr(&mut self) -> Result<Option<Expr>, SyntaxError> {
+        let mut expr = match self.parse_add_expr()? {
+            None => return Ok(None),
+            Some(expr) => expr
+        };
+        while let Some(operator) = self.lexer.next() {
+            if !operator.token_type.eq(&TokenType::Ampersand) {
+                self.unused_lookahead = Some(operator);
+                break;
+            }
+            let right = match self.parse_add_expr()? {
+                None => return Err(SyntaxError::new("Concatenation expression missing right side.".to_string(),
+                                                    Some(operator))),
+                Some(expr) => expr
+            };
+            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) }
+        }
+        Ok(Some(expr))
+    }
+
+    fn parse_add_expr(&mut self) -> Result<Option<Expr>, SyntaxError> {
+        let mut expr = match self.parse_mul_expr()? {
+            None => return Ok(None),
+            Some(expr) => expr
+        };
+        while let Some(operator) = self.lexer.next() {
+            if !operator.token_type.eq(&TokenType::Plus) && !operator.token_type.eq(&TokenType::Minus) {
+                self.unused_lookahead = Some(operator);
+                break;
+            }
+            let right = match self.parse_mul_expr()? {
+                None => return Err(SyntaxError::new("Expression missing right side.".to_string(),
+                                                    Some(operator))),
+                Some(expr) => expr
+            };
+            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) }
+        }
+        Ok(Some(expr))
+    }
+
+    fn parse_mul_expr(&mut self) -> Result<Option<Expr>, SyntaxError> {
+        let mut expr = match self.parse_unary_expr()? {
+            None => return Ok(None),
+            Some(expr) => expr
+        };
+        while let Some(operator) = self.lexer.next() {
+            if !operator.token_type.eq(&TokenType::Star) && !operator.token_type.eq(&TokenType::Slash) {
+                self.unused_lookahead = Some(operator);
+                break;
+            }
+            let right = match self.parse_unary_expr()? {
+                None => return Err(SyntaxError::new("Expression missing right side.".to_string(),
+                                                    Some(operator))),
+                Some(expr) => expr
+            };
+            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) }
+        }
+        Ok(Some(expr))
+    }
+
+    fn parse_unary_expr(&mut self) -> Result<Option<Expr>, SyntaxError> {
+        let curr_token = match self.lexer.next() {
+            None => return Ok(None),
+            Some(token) => token
+        };
+
+        match curr_token.token_type {
+            TokenType::Plus => {
+                match self.parse_expr()? {
+                    None => return Err(SyntaxError::new("Plus unary expression missing operand.".to_string(),
+                                                        Some(curr_token))),
+                    Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
+                }
+            }
+            TokenType::Minus => {
+                match self.parse_expr()? {
+                    None => return Err(SyntaxError::new("Minus unary expression missing operand.".to_string(),
+                                                        Some(curr_token))),
+                    Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
+                }
+            }
+            TokenType::Bang => {
+                match self.parse_expr()? {
+                    None => return Err(SyntaxError::new("Negate unary expression missing operand.".to_string(),
+                                                        Some(curr_token))),
+                    Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
+                }
+            }
+            TokenType::Ampersand => {
+                match self.parse_expr()? {
+                    None => return Err(SyntaxError::new("Stringify unary expression missing operand.".to_string(),
+                                                        Some(curr_token))),
+                    Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
+                }
+            }
+            TokenType::LeftParen => {
+                match self.parse_expr()? {
+                    None => Err(SyntaxError::new("Unexpected end of file.".to_string(),
+                                                 Some(curr_token))),
+                    Some(expr) => {
+                        match self.lexer.next() {
+                            Some(ref token) if token.token_type.eq(&TokenType::RightParen) =>
+                                Ok(Some(Expr::Grouping { expr: Box::new(expr) })),
+                            _ => Err(SyntaxError::new("Unexpected end of grouping.".to_string(),
+                                                      Some(curr_token))),
+                        }
+                    }
+                }
+            }
+            TokenType::String => Ok(Some(Expr::Literal { value: curr_token })),
+            TokenType::Integer => Ok(Some(Expr::Literal { value: curr_token })),
+            TokenType::Float => Ok(Some(Expr::Literal { value: curr_token })),
+            TokenType::True => Ok(Some(Expr::Literal { value: curr_token })),
+            TokenType::False => Ok(Some(Expr::Literal { value: curr_token })),
+            TokenType::Identifier => {
+                match self.parse_ident()? {
+                    None => Ok(None),
+                    Some(ident) => {
+                        let next_token = match self.lexer.next() {
+                            None => return Ok(Some(ident)),
+                            Some(token) => token
+                        };
+                        if next_token.token_type.eq(&TokenType::LeftParen) {
+                            let mut args = Vec::new();
+                            while let Some(curr_token) = self.lexer.next() {
+                                if curr_token.token_type.eq(&TokenType::Comma) {
+                                    // TODO ugly hack that technically doesn't meet the spec
+                                    continue;
+                                }
+                                if curr_token.token_type.eq(&TokenType::RightParen) {
+                                    return Ok(Some(Expr::FnCall { ident: Box::new(ident) , args }));
+                                } else {
+                                    let param = match self.parse_ident()? {
+                                        None => return Err(SyntaxError::new(
+                                            "Function call argument not a valid lvalue.".to_string(),
+                                            Some(curr_token))),
+                                        Some(expr) => expr
+                                    };
+                                    args.push(Box::new(param));
+                                }
+                            }
+                        }
+                        Ok(Some(ident))
+                    }
+                }
+            }
+            _ => Err(SyntaxError::new("Unexpected token.".to_string(), Some(curr_token)))
+        }
     }
 
     fn parse_ident(&mut self) -> Result<Option<Expr>, SyntaxError> {
         match self.lexer.next() {
             Some(token) => {
                 if token.token_type.eq(&TokenType::Identifier) {
-                    return Ok(Some(Expr::Literal { value: token }));
+                    return Ok(Some(Expr::Identifier { ident: token }));
                 }
                 Err(SyntaxError::new("Expected identifier.".to_string(), Some(token)))
             }

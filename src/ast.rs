@@ -22,7 +22,9 @@ pub enum Expr {
     Binary { left: Box<Expr>, operator: Token, right: Box<Expr> },
     Unary { operator: Token, right: Box<Expr> },
     Literal { value: Token },
-    FnCall { ident: Token, args: Vec<Box<Expr>> }
+    Identifier { ident: Token },
+    Grouping { expr: Box<Expr> },
+    FnCall { ident: Box<Expr>, args: Vec<Box<Expr>> }
 }
 
 pub struct SyntaxError {
