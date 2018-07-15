@@ -18,39 +18,37 @@ impl<'a> Parser<'a> {
         self.had_error
     }
 
+    fn get_next_token(&mut self, allow_eof: bool) -> Result<Option<Token>, SyntaxError> {
+        let unused_lookahead = self.unused_lookahead.clone();
+        self.unused_lookahead = None;
+        match unused_lookahead {
+            None => match self.lexer.next() {
+                None if allow_eof => Ok(None),
+                Some(ref token) => Ok(Some(token.clone())),
+                None => Err(SyntaxError::new("Unexpected end of file.".to_string(), None))
+            }
+            Some(ref token) => Ok(Some(token.clone()))
+        }
+    }
+
     fn parse(&mut self) -> Result<Option<Stmt>, SyntaxError> {
         match self.parse_stmt()? {
             None => Ok(None),
             Some(stmt) => {
-                let curr_token = match self.unused_lookahead {
-                    None => match self.lexer.next() {
-                        None => return Ok(None),
-                        Some(ref token) => token.clone(),
-                    }
-                    Some(ref token) => token.clone()
-                };
-                self.unused_lookahead = None;
-
-                if !curr_token.token_type.eq(&TokenType::EOL) {
-
-                    return Err(SyntaxError::new("No newline at end of statement.".to_string(),
-                                                Some(curr_token)));
+                match self.get_next_token(true)? {
+                    Some(ref token) if !token.token_type.eq(&TokenType::EOL) => return Err(SyntaxError::new("No newline at end of statement.".to_string(),
+                                                                                                            Some(token.clone()))),
+                    _ => Ok(Some(stmt))
                 }
-                Ok(Some(stmt))
             }
         }
     }
 
     fn parse_stmt(&mut self) -> Result<Option<Stmt>, SyntaxError> {
-        let curr_token = match self.unused_lookahead {
-            None => match self.lexer.next() {
-                None => return Ok(None),
-                Some(ref token) => token.clone(),
-            }
-            Some(ref token) => token.clone()
+        let curr_token = match self.get_next_token(true)? {
+            None => return Ok(None),
+            Some(token) => token
         };
-        self.unused_lookahead = None;
-
         match curr_token.token_type {
             TokenType::SyntaxError => Err(SyntaxError::new("Syntax error while lexing.".to_string(),
                                                            Some(curr_token))),
@@ -68,19 +66,17 @@ impl<'a> Parser<'a> {
                     Some(expr) => expr
                 };
 
-                let token = match self.lexer.next() {
+                let opening_brace = match self.get_next_token(false)? {
                     None => return Err(SyntaxError::new("Expected beginning of block statement but found end of file.".to_string(),
                                                         None)),
-                    Some(token) => token
+                    Some(ref token) if !token.token_type.eq(&TokenType::LeftBrace) => return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
+                                                                                                                  Some(token.clone()))),
+                    Some(ref token) => token.clone()
                 };
-                if !token.token_type.eq(&TokenType::LeftBrace) {
-                    return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
-                                                Some(token)));
-                }
 
                 match self.parse_block_stmt()? {
                     None => return Err(SyntaxError::new("While statement missing body.".to_string(),
-                                                        Some(curr_token))),
+                                                        Some(opening_brace))),
                     Some(stmt) => Ok(Some(Stmt::While { cond: Box::new(cond), body: Box::new(stmt) }))
                 }
             }
@@ -96,14 +92,12 @@ impl<'a> Parser<'a> {
                                                         Some(curr_token))),
                     Some(expr) => expr
                 };
-                let token = match self.lexer.next() {
+                match self.get_next_token(false)? {
                     None => return Err(SyntaxError::new("Let statement missing =.".to_string(), Some(curr_token))),
-                    Some(token) => token
+                    Some(ref token) if !token.token_type.eq(&TokenType::Equal) => return Err(SyntaxError::new("Let statement identifier followed by invalid token.".to_string(),
+                                                                                                              Some(token.clone()))),
+                    _ => ()
                 };
-                if !token.token_type.eq(&TokenType::Equal) {
-                    return Err(SyntaxError::new("Let statement identifier followed by invalid token.".to_string(),
-                                                Some(token)));
-                }
                 match self.parse_expr()? {
                     None => return Err(SyntaxError::new("Let statement missing assignment expression.".to_string(),
                                                         Some(curr_token))),
@@ -150,23 +144,21 @@ impl<'a> Parser<'a> {
                         Some(expr) => expr
                     }
                 };
-                let token = match self.lexer.next() {
+                match self.get_next_token(false)? {
                     None => return Err(SyntaxError::new("Function definition missing (.".to_string(),
                                                         Some(curr_token))),
-                    Some(token) => token
+                    Some(ref token) if !token.token_type.eq(&TokenType::LeftParen) => return Err(SyntaxError::new("Function definition missing (.".to_string(),
+                                                                                                                  Some(token.clone()))),
+                    _ => ()
                 };
-                if !token.token_type.eq(&TokenType::LeftParen) {
-                    return Err(SyntaxError::new("Function definition missing (.".to_string(),
-                                                Some(token)));
-                }
                 let mut params = Vec::new();
-                while let Some(curr_token) = self.lexer.next() {
+                while let Some(curr_token) = self.get_next_token(false)? {
                     if curr_token.token_type.eq(&TokenType::Comma) {
                         // TODO ugly hack that technically doesn't meet the spec
                         continue;
                     }
                     if curr_token.token_type.eq(&TokenType::RightParen) {
-                        let token = match self.lexer.next() {
+                        let token = match self.get_next_token(false)? {
                             None => return Err(SyntaxError::new("Expected beginning of block statement but found end of file.".to_string(),
                                                                 None)),
                             Some(token) => token
@@ -230,15 +222,13 @@ impl<'a> Parser<'a> {
             Some(expr) => expr
         };
 
-        let token = match self.lexer.next() {
+        match self.get_next_token(false)? {
             None => return Err(SyntaxError::new("Expected beginning of block statement but found end of file.".to_string(),
                                                 None)),
-            Some(token) => token
+            Some(ref token) if token.token_type.eq(&TokenType::LeftBrace) => return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
+                                                                                                         Some(token.clone()))),
+            _ => ()
         };
-        if !token.token_type.eq(&TokenType::LeftBrace) {
-            return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
-                                        Some(token)));
-        }
 
         let body = match self.parse_block_stmt()? {
             None => return Err(SyntaxError::new("If statement missing body.".to_string(),
@@ -246,7 +236,7 @@ impl<'a> Parser<'a> {
             Some(stmt) => stmt
         };
 
-        let next_token = match self.lexer.next() {
+        let next_token = match self.get_next_token(true)? {
             None => return Ok(Some(Stmt::If { cond: Box::new(cond), true_body: Box::new(body), false_body: None })),
             Some(token) => token
         };
@@ -264,15 +254,13 @@ impl<'a> Parser<'a> {
                 }))
             }
             TokenType::Else => {
-                let token = match self.lexer.next() {
+                match self.get_next_token(false)? {
                     None => return Err(SyntaxError::new("Expected beginning of block statement but found end of file.".to_string(),
                                                         None)),
-                    Some(token) => token
+                    Some(ref token) if !token.token_type.eq(&TokenType::LeftBrace) => return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
+                                                                                                                  Some(token.clone()))),
+                    _ => ()
                 };
-                if !token.token_type.eq(&TokenType::LeftBrace) {
-                    return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
-                                                Some(token)));
-                }
 
                 let false_body = match self.parse_block_stmt()? {
                     None => return Err(SyntaxError::new("Elif missing body.".to_string(), Some(next_token))),
@@ -292,30 +280,23 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_block_stmt(&mut self) -> Result<Option<Stmt>, SyntaxError> {
-        let token = match self.lexer.next() {
+        let mut stmts = Vec::new();
+        let token = match self.get_next_token(false)? {
             None => return Err(SyntaxError::new("Expected body of block statement but found end of file.".to_string(),
                                                 None)),
             Some(token) => token
         };
-        let mut stmts = Vec::new();
         match token.token_type {
             TokenType::EOL => {
                 // multi-line block statement
                 while let Some(stmt) = self.parse()? {
-                    let lookahead_token = match self.unused_lookahead {
-                        None => match self.lexer.next() {
-                            None => return Err(SyntaxError::new("Unterminated block statement.".to_string(),
-                                                                None)),
-                            Some(ref token) => token.clone(),
-                        }
-                        Some(ref token) => token.clone()
-                    };
                     stmts.push(Box::new(stmt));
-                    if lookahead_token.token_type.eq(&TokenType::RightBrace) {
-                        break;
-                    } else {
-                        self.unused_lookahead = Some(lookahead_token.clone());
-                    }
+                    match self.get_next_token(false)? {
+                        None => return Err(SyntaxError::new("Unterminated block statement.".to_string(),
+                                                            None)),
+                        Some(ref token) if token.token_type.eq(&TokenType::RightBrace) => break,
+                        Some(ref token) => self.unused_lookahead = Some(token.clone())
+                    };
                 }
             }
             _ => {
@@ -326,15 +307,13 @@ impl<'a> Parser<'a> {
                                                         None)),
                     Some(stmt) => {
                         stmts.push(Box::new(stmt));
-                        let token = match self.lexer.next() {
+                        match self.get_next_token(false)? {
                             None => return Err(SyntaxError::new("Unterminated block statement.".to_string(),
                                                                 None)),
-                            Some(token) => token
+                            Some(ref token) if !token.token_type.eq(&TokenType::RightBrace) => return Err(SyntaxError::new("Block statement missing closing brace.".to_string(),
+                                                                                                                           Some(token.clone()))),
+                            _ => ()
                         };
-                        if !token.token_type.eq(&TokenType::RightBrace) {
-                            return Err(SyntaxError::new("Block statement missing closing brace.".to_string(),
-                                                        Some(token)));
-                        }
                     }
                 }
             }
@@ -352,7 +331,7 @@ impl<'a> Parser<'a> {
             None => return Ok(None),
             Some(expr) => expr
         };
-        while let Some(operator) = self.lexer.next() {
+        while let Some(operator) = self.get_next_token(true)? {
             if !operator.token_type.eq(&TokenType::Or) {
                 self.unused_lookahead = Some(operator);
                 break;
@@ -362,7 +341,7 @@ impl<'a> Parser<'a> {
                                                     Some(operator))),
                 Some(expr) => expr
             };
-            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) }
+            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
         }
         Ok(Some(expr))
     }
@@ -372,7 +351,7 @@ impl<'a> Parser<'a> {
             None => return Ok(None),
             Some(expr) => expr
         };
-        while let Some(operator) = self.lexer.next() {
+        while let Some(operator) = self.get_next_token(true)? {
             if !operator.token_type.eq(&TokenType::And) {
                 self.unused_lookahead = Some(operator);
                 break;
@@ -382,7 +361,7 @@ impl<'a> Parser<'a> {
                                                     Some(operator))),
                 Some(expr) => expr
             };
-            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) }
+            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
         }
         Ok(Some(expr))
     }
@@ -392,7 +371,7 @@ impl<'a> Parser<'a> {
             None => return Ok(None),
             Some(expr) => expr
         };
-        while let Some(operator) = self.lexer.next() {
+        while let Some(operator) = self.get_next_token(true)? {
             if !operator.token_type.eq(&TokenType::EqualEqual) && !operator.token_type.eq(&TokenType::BangEqual) {
                 self.unused_lookahead = Some(operator);
                 break;
@@ -402,7 +381,7 @@ impl<'a> Parser<'a> {
                                                     Some(operator))),
                 Some(expr) => expr
             };
-            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) }
+            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
         }
         Ok(Some(expr))
     }
@@ -412,7 +391,7 @@ impl<'a> Parser<'a> {
             None => return Ok(None),
             Some(expr) => expr
         };
-        while let Some(operator) = self.lexer.next() {
+        while let Some(operator) = self.get_next_token(true)? {
             if !operator.token_type.eq(&TokenType::GreaterEqual)
                 && !operator.token_type.eq(&TokenType::Greater)
                 && !operator.token_type.eq(&TokenType::LesserEqual)
@@ -425,7 +404,7 @@ impl<'a> Parser<'a> {
                                                     Some(operator))),
                 Some(expr) => expr
             };
-            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) }
+            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
         }
         Ok(Some(expr))
     }
@@ -435,7 +414,7 @@ impl<'a> Parser<'a> {
             None => return Ok(None),
             Some(expr) => expr
         };
-        while let Some(operator) = self.lexer.next() {
+        while let Some(operator) = self.get_next_token(true)? {
             if !operator.token_type.eq(&TokenType::Ampersand) {
                 self.unused_lookahead = Some(operator);
                 break;
@@ -445,7 +424,7 @@ impl<'a> Parser<'a> {
                                                     Some(operator))),
                 Some(expr) => expr
             };
-            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) }
+            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
         }
         Ok(Some(expr))
     }
@@ -455,7 +434,7 @@ impl<'a> Parser<'a> {
             None => return Ok(None),
             Some(expr) => expr
         };
-        while let Some(operator) = self.lexer.next() {
+        while let Some(operator) = self.get_next_token(true)? {
             if !operator.token_type.eq(&TokenType::Plus) && !operator.token_type.eq(&TokenType::Minus) {
                 self.unused_lookahead = Some(operator);
                 break;
@@ -465,7 +444,7 @@ impl<'a> Parser<'a> {
                                                     Some(operator))),
                 Some(expr) => expr
             };
-            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) }
+            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
         }
         Ok(Some(expr))
     }
@@ -475,7 +454,7 @@ impl<'a> Parser<'a> {
             None => return Ok(None),
             Some(expr) => expr
         };
-        while let Some(operator) = self.lexer.next() {
+        while let Some(operator) = self.get_next_token(true)? {
             if !operator.token_type.eq(&TokenType::Star) && !operator.token_type.eq(&TokenType::Slash) {
                 self.unused_lookahead = Some(operator);
                 break;
@@ -485,45 +464,41 @@ impl<'a> Parser<'a> {
                                                     Some(operator))),
                 Some(expr) => expr
             };
-            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) }
+            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
         }
         Ok(Some(expr))
     }
 
     fn parse_unary_expr(&mut self) -> Result<Option<Expr>, SyntaxError> {
-        let curr_token = match self.unused_lookahead {
-            None => match self.lexer.next() {
-                None => return Ok(None),
-                Some(ref token) => token.clone(),
-            }
-            Some(ref token) => token.clone()
+        let curr_token = match self.get_next_token(true)? {
+            None => return Ok(None),
+            Some(token) => token
         };
-        self.unused_lookahead = None;
 
         match curr_token.token_type {
             TokenType::Plus => {
-                match self.parse_expr()? {
+                match self.parse_unary_expr()? {
                     None => return Err(SyntaxError::new("Plus unary expression missing operand.".to_string(),
                                                         Some(curr_token))),
                     Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
                 }
             }
             TokenType::Minus => {
-                match self.parse_expr()? {
+                match self.parse_unary_expr()? {
                     None => return Err(SyntaxError::new("Minus unary expression missing operand.".to_string(),
                                                         Some(curr_token))),
                     Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
                 }
             }
             TokenType::Bang => {
-                match self.parse_expr()? {
+                match self.parse_unary_expr()? {
                     None => return Err(SyntaxError::new("Negate unary expression missing operand.".to_string(),
                                                         Some(curr_token))),
                     Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
                 }
             }
             TokenType::Ampersand => {
-                match self.parse_expr()? {
+                match self.parse_unary_expr()? {
                     None => return Err(SyntaxError::new("Stringify unary expression missing operand.".to_string(),
                                                         Some(curr_token))),
                     Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
@@ -534,7 +509,7 @@ impl<'a> Parser<'a> {
                     None => Err(SyntaxError::new("Unexpected end of file.".to_string(),
                                                  Some(curr_token))),
                     Some(expr) => {
-                        match self.lexer.next() {
+                        match self.get_next_token(false)? {
                             Some(ref token) if token.token_type.eq(&TokenType::RightParen) =>
                                 Ok(Some(Expr::Grouping { expr: Box::new(expr) })),
                             _ => Err(SyntaxError::new("Unexpected end of grouping.".to_string(),
@@ -553,35 +528,35 @@ impl<'a> Parser<'a> {
                 match self.parse_ident()? {
                     None => Ok(None),
                     Some(ident) => {
-                        let next_token = match self.lexer.next() {
-                            None => return Ok(Some(ident)),
-                            Some(token) => token
-                        };
-                        if next_token.token_type.eq(&TokenType::LeftParen) {
-                            // function call
-                            let mut args = Vec::new();
-                            while let Some(curr_token) = self.lexer.next() {
-                                if curr_token.token_type.eq(&TokenType::Comma) {
-                                    // TODO ugly hack that technically doesn't meet the spec
-                                    continue;
+                        match self.get_next_token(true)? {
+                            None => Ok(Some(ident)),
+                            Some(ref token) if token.token_type.eq(&TokenType::LeftParen) => {
+                                // function call
+                                let mut args = Vec::new();
+                                while let Some(curr_token) = self.get_next_token(false)? {
+                                    match curr_token.token_type {
+                                        TokenType::Comma => continue,
+                                        TokenType::RightParen => return Ok(Some(Expr::FnCall { ident: Box::new(ident), args })),
+                                        _ => {
+                                            self.unused_lookahead = Some(curr_token.clone());
+                                            let param = match self.parse_ident()? {
+                                                None => return Err(SyntaxError::new(
+                                                    "Function call argument not a valid lvalue.".to_string(),
+                                                    Some(curr_token))),
+                                                Some(expr) => expr
+                                            };
+                                            args.push(Box::new(param));
+                                        }
+                                    }
                                 }
-                                if curr_token.token_type.eq(&TokenType::RightParen) {
-                                    return Ok(Some(Expr::FnCall { ident: Box::new(ident), args }));
-                                } else {
-                                    self.unused_lookahead = Some(curr_token.clone());
-                                    let param = match self.parse_ident()? {
-                                        None => return Err(SyntaxError::new(
-                                            "Function call argument not a valid lvalue.".to_string(),
-                                            Some(curr_token))),
-                                        Some(expr) => expr
-                                    };
-                                    args.push(Box::new(param));
-                                }
+                                Err(SyntaxError::new("Unterminated function call parameter list.".to_string(),
+                                                     Some(token.clone())))
                             }
-                        } else {
-                            self.unused_lookahead = Some(next_token);
+                            Some(ref token) => {
+                                self.unused_lookahead = Some(token.clone());
+                                Ok(Some(ident))
+                            }
                         }
-                        Ok(Some(ident))
                     }
                 }
             }
