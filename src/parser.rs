@@ -22,17 +22,21 @@ impl<'a> Parser<'a> {
         match self.parse_stmt()? {
             None => Ok(None),
             Some(stmt) => {
-                match self.lexer.next() {
-                    None => Err(SyntaxError::new("No newline at end of file.".to_string(),
-                                                 None)),
-                    Some(token) => {
-                        if !token.token_type.eq(&TokenType::EOL) {
-                            return Err(SyntaxError::new("No newline at end of statement.".to_string(),
-                                                        Some(token)));
-                        }
-                        Ok(Some(stmt))
+                let curr_token = match self.unused_lookahead {
+                    None => match self.lexer.next() {
+                        None => return Ok(None),
+                        Some(ref token) => token.clone(),
                     }
+                    Some(ref token) => token.clone()
+                };
+                self.unused_lookahead = None;
+
+                if !curr_token.token_type.eq(&TokenType::EOL) {
+
+                    return Err(SyntaxError::new("No newline at end of statement.".to_string(),
+                                                Some(curr_token)));
                 }
+                Ok(Some(stmt))
             }
         }
     }
@@ -194,6 +198,7 @@ impl<'a> Parser<'a> {
                                      Some(curr_token)))
             }
             _ => {
+                self.unused_lookahead = Some(curr_token);
                 let expr = match self.parse_expr()? {
                     None => return Ok(None),
                     Some(expr) => expr
@@ -297,16 +302,19 @@ impl<'a> Parser<'a> {
             TokenType::EOL => {
                 // multi-line block statement
                 while let Some(stmt) = self.parse()? {
-                    match self.lexer.next() {
-                        None => return Err(SyntaxError::new("Unterminated block statement.".to_string(),
-                                                            None)),
-                        Some(token) => {
-                            self.unused_lookahead = Some(token.clone());
-                            stmts.push(Box::new(stmt));
-                            if token.token_type.eq(&TokenType::RightBrace) {
-                                break;
-                            }
+                    let lookahead_token = match self.unused_lookahead {
+                        None => match self.lexer.next() {
+                            None => return Err(SyntaxError::new("Unterminated block statement.".to_string(),
+                                                                None)),
+                            Some(ref token) => token.clone(),
                         }
+                        Some(ref token) => token.clone()
+                    };
+                    stmts.push(Box::new(stmt));
+                    if lookahead_token.token_type.eq(&TokenType::RightBrace) {
+                        break;
+                    } else {
+                        self.unused_lookahead = Some(lookahead_token.clone());
                     }
                 }
             }
@@ -358,7 +366,6 @@ impl<'a> Parser<'a> {
         }
         Ok(Some(expr))
     }
-
 
     fn parse_and_expr(&mut self) -> Result<Option<Expr>, SyntaxError> {
         let mut expr = match self.parse_eq_expr()? {
@@ -484,10 +491,14 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_unary_expr(&mut self) -> Result<Option<Expr>, SyntaxError> {
-        let curr_token = match self.lexer.next() {
-            None => return Ok(None),
-            Some(token) => token
+        let curr_token = match self.unused_lookahead {
+            None => match self.lexer.next() {
+                None => return Ok(None),
+                Some(ref token) => token.clone(),
+            }
+            Some(ref token) => token.clone()
         };
+        self.unused_lookahead = None;
 
         match curr_token.token_type {
             TokenType::Plus => {
@@ -538,6 +549,7 @@ impl<'a> Parser<'a> {
             TokenType::True => Ok(Some(Expr::Literal { value: curr_token })),
             TokenType::False => Ok(Some(Expr::Literal { value: curr_token })),
             TokenType::Identifier => {
+                self.unused_lookahead = Some(curr_token);
                 match self.parse_ident()? {
                     None => Ok(None),
                     Some(ident) => {
@@ -546,6 +558,7 @@ impl<'a> Parser<'a> {
                             Some(token) => token
                         };
                         if next_token.token_type.eq(&TokenType::LeftParen) {
+                            // function call
                             let mut args = Vec::new();
                             while let Some(curr_token) = self.lexer.next() {
                                 if curr_token.token_type.eq(&TokenType::Comma) {
@@ -553,8 +566,9 @@ impl<'a> Parser<'a> {
                                     continue;
                                 }
                                 if curr_token.token_type.eq(&TokenType::RightParen) {
-                                    return Ok(Some(Expr::FnCall { ident: Box::new(ident) , args }));
+                                    return Ok(Some(Expr::FnCall { ident: Box::new(ident), args }));
                                 } else {
+                                    self.unused_lookahead = Some(curr_token.clone());
                                     let param = match self.parse_ident()? {
                                         None => return Err(SyntaxError::new(
                                             "Function call argument not a valid lvalue.".to_string(),
@@ -564,6 +578,8 @@ impl<'a> Parser<'a> {
                                     args.push(Box::new(param));
                                 }
                             }
+                        } else {
+                            self.unused_lookahead = Some(next_token);
                         }
                         Ok(Some(ident))
                     }
@@ -574,15 +590,19 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_ident(&mut self) -> Result<Option<Expr>, SyntaxError> {
-        match self.lexer.next() {
-            Some(token) => {
-                if token.token_type.eq(&TokenType::Identifier) {
-                    return Ok(Some(Expr::Identifier { ident: token }));
-                }
-                Err(SyntaxError::new("Expected identifier.".to_string(), Some(token)))
+        let curr_token = match self.unused_lookahead {
+            None => match self.lexer.next() {
+                None => return Err(SyntaxError::new("Unexpected end of input".to_string(), None)),
+                Some(ref token) => token.clone(),
             }
-            None => Err(SyntaxError::new("Unexpected end of input".to_string(), None)),
+            Some(ref token) => token.clone()
+        };
+        self.unused_lookahead = None;
+
+        if curr_token.token_type.eq(&TokenType::Identifier) {
+            return Ok(Some(Expr::Identifier { ident: curr_token }));
         }
+        Err(SyntaxError::new("Expected identifier.".to_string(), Some(curr_token)))
     }
 
     fn sync(&mut self) {
@@ -657,6 +677,7 @@ impl<'a> Iterator for Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use token::TokenLiteral;
 
     #[test]
     fn test_next_stmt() {
@@ -718,6 +739,19 @@ mod tests {
         let mut parser = Parser::new(Lexer::new("{\n    next\n"));
         match parser.next() {
             None => assert!(parser.had_error()),
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_identifier() {
+        let mut parser = Parser::new(Lexer::new("a\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Identifier { ident } => assert_eq!(ident, Token::new(TokenType::Identifier,
+                                                                           Some(TokenLiteral::Identifier("a".to_string())), 0)),
+                _ => panic!()
+            },
             _ => panic!()
         }
     }
