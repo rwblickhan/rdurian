@@ -278,8 +278,15 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_ident(&mut self) -> Result<Option<Expr>, SyntaxError> {
-        // TODO
-        Err(SyntaxError::new("parse_ident: Unimplemented.".to_string(), None))
+        match self.lexer.next() {
+            Some(token) => {
+                if token.token_type.eq(&TokenType::Identifier) {
+                    return Ok(Some(Expr::Literal { value: token }));
+                }
+                Err(SyntaxError::new("Expected identifier.".to_string(), Some(token)))
+            },
+            None => Err(SyntaxError::new("Unexpected end of input".to_string(), None)),
+        }
     }
 
     fn sync(&mut self) {
