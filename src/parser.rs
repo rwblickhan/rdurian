@@ -36,8 +36,9 @@ impl<'a> Parser<'a> {
             None => Ok(None),
             Some(stmt) => {
                 match self.get_next_token(false)? {
-                    Some(ref token) if !token.token_type.eq(&TokenType::EOL) => return Err(SyntaxError::new("No newline at end of statement.".to_string(),
-                                                                                                            Some(token.clone()))),
+                    Some(ref token) if !token.token_type.eq(&TokenType::EOL) =>
+                        return Err(SyntaxError::new("No newline at end of statement.".to_string(),
+                                                    Some(token.clone()))),
                     _ => Ok(Some(stmt))
                 }
             }
@@ -178,9 +179,10 @@ impl<'a> Parser<'a> {
                             }))
                         }
                     } else {
+                        self.unused_lookahead = Some(curr_token.clone());
                         let param = match self.parse_ident()? {
                             None => return Err(SyntaxError::new("Function definition parameter not a valid lvalue.".to_string(),
-                                                                Some(curr_token))),
+                                                                Some(curr_token.clone()))),
                             Some(expr) => expr
                         };
                         params.push(Box::new(param));
@@ -195,7 +197,7 @@ impl<'a> Parser<'a> {
                     None => return Ok(None),
                     Some(expr) => expr
                 };
-                match self.lexer.next() {
+                match self.get_next_token(true)? {
                     None => Ok(Some(Stmt::Expr { expr: Box::new(expr) })),
                     Some(token) => match token.token_type {
                         TokenType::Equal => match self.parse_expr()? {
@@ -723,7 +725,7 @@ mod tests {
                     _ => panic!()
                 };
                 match *false_body.unwrap() {
-                    Stmt::If {cond, true_body, false_body } => {
+                    Stmt::If { cond, true_body, false_body } => {
                         match *cond {
                             Expr::Identifier { ident } => {
                                 assert_eq!(ident,
@@ -744,7 +746,7 @@ mod tests {
                             _ => panic!()
                         };
                         match *false_body.unwrap() {
-                            Stmt::Block {stmts} => {
+                            Stmt::Block { stmts } => {
                                 let stmt = &**stmts.iter().next().unwrap();
                                 match stmt {
                                     &Stmt::Break => return,
@@ -828,6 +830,210 @@ mod tests {
         let mut parser = Parser::new(Lexer::new("break\n"));
         match parser.next().unwrap() {
             Stmt::Break => return,
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_let_stmt() {
+        let mut parser = Parser::new(Lexer::new("let a = 1 + 2\n"));
+        match parser.next().unwrap() {
+            Stmt::Let { ident, expr } => {
+                match *ident {
+                    Expr::Identifier { ident } => assert_eq!(ident,
+                                                             Token::new(TokenType::Identifier,
+                                                                        Some(TokenLiteral::Identifier("a".to_string())),
+                                                                        0)),
+                    _ => panic!()
+                };
+                match *expr {
+                    Expr::Binary { ref left, ref operator, ref right } => {
+                        if !operator.eq(&Token::new(TokenType::Plus, None, 0)) {
+                            panic!()
+                        }
+                        match **left {
+                            Expr::Literal { ref value } => assert_eq!(value, &Token::new(TokenType::Integer,
+                                                                                         Some(TokenLiteral::Int(1)),
+                                                                                         0)),
+                            _ => panic!()
+                        };
+                        match **right {
+                            Expr::Literal { ref value } => assert_eq!(value, &Token::new(TokenType::Integer,
+                                                                                         Some(TokenLiteral::Int(2)),
+                                                                                         0)),
+                            _ => panic!()
+                        }
+                    }
+                    _ => panic!()
+                }
+            }
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_assign_stmt() {
+        let mut parser = Parser::new(Lexer::new("a = \"hi \" & \"user\"\n"));
+        match parser.next().unwrap() {
+            Stmt::Assign { ident, expr } => {
+                match *ident {
+                    Expr::Identifier { ident } => assert_eq!(ident,
+                                                             Token::new(TokenType::Identifier,
+                                                                        Some(TokenLiteral::Identifier("a".to_string())),
+                                                                        0)),
+                    _ => panic!()
+                };
+                match *expr {
+                    Expr::Binary { ref left, ref operator, ref right } => {
+                        if !operator.eq(&Token::new(TokenType::Ampersand, None, 0)) {
+                            panic!()
+                        }
+                        match **left {
+                            Expr::Literal { ref value } => assert_eq!(value, &Token::new(TokenType::String,
+                                                                                         Some(TokenLiteral::String("hi ".to_string())),
+                                                                                         0)),
+                            _ => panic!()
+                        };
+                        match **right {
+                            Expr::Literal { ref value } => assert_eq!(value, &Token::new(TokenType::String,
+                                                                                         Some(TokenLiteral::String("user".to_string())),
+                                                                                         0)),
+                            _ => panic!()
+                        }
+                    }
+                    _ => panic!()
+                }
+            }
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_print_stmt() {
+        let mut parser = Parser::new(Lexer::new("print a\n"));
+        match parser.next().unwrap() {
+            Stmt::Print { expr } => {
+                match *expr {
+                    Expr::Identifier { ident } => {
+                        assert_eq!(ident,
+                                   Token::new(TokenType::Identifier,
+                                              Some(TokenLiteral::Identifier("a".to_string())),
+                                              0));
+                    }
+                    _ => panic!()
+                }
+            }
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_err_stmt() {
+        let mut parser = Parser::new(Lexer::new("err a\n"));
+        match parser.next().unwrap() {
+            Stmt::Err { expr } => {
+                match *expr {
+                    Expr::Identifier { ident } => {
+                        assert_eq!(ident,
+                                   Token::new(TokenType::Identifier,
+                                              Some(TokenLiteral::Identifier("a".to_string())),
+                                              0));
+                    }
+                    _ => panic!()
+                }
+            }
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_scan_stmt() {
+        let mut parser = Parser::new(Lexer::new("scan a\n"));
+        match parser.next().unwrap() {
+            Stmt::Scan { ident } => {
+                match *ident {
+                    Expr::Identifier { ident } => {
+                        assert_eq!(ident,
+                                   Token::new(TokenType::Identifier,
+                                              Some(TokenLiteral::Identifier("a".to_string())),
+                                              0));
+                    }
+                    _ => panic!()
+                }
+            }
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_return_stmt() {
+        let mut parser = Parser::new(Lexer::new("return a\n"));
+        match parser.next().unwrap() {
+            Stmt::Return { expr } => {
+                match *expr {
+                    Expr::Identifier { ident } => {
+                        assert_eq!(ident,
+                                   Token::new(TokenType::Identifier,
+                                              Some(TokenLiteral::Identifier("a".to_string())),
+                                              0));
+                    }
+                    _ => panic!()
+                }
+            }
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_fn_decl() {
+        let mut parser = Parser::new(Lexer::new("def f(a,b) {\n return 1.0\n}\n"));
+        match parser.next().unwrap() {
+            Stmt::FnDecl { ident, params, body } => {
+                match *ident {
+                    Expr::Identifier { ident } => assert_eq!(ident,
+                                                             Token::new(TokenType::Identifier,
+                                                                        Some(TokenLiteral::Identifier("f".to_string())),
+                                                                        0)),
+                    _ => panic!()
+                };
+                let mut iter = params.iter();
+                let param_a = &**iter.next().unwrap();
+                match param_a {
+                    &Expr::Identifier { ref ident } => {
+                        assert_eq!(ident,
+                                   &Token::new(TokenType::Identifier,
+                                               Some(TokenLiteral::Identifier("a".to_string())),
+                                               0));
+                        let param_b = &**iter.next().unwrap();
+                        match param_b {
+                            &Expr::Identifier { ref ident } => assert_eq!(ident,
+                                                                          &Token::new(TokenType::Identifier,
+                                                                                      Some(TokenLiteral::Identifier("b".to_string())),
+                                                                                      0)),
+                            _ => panic!()
+                        }
+                    }
+                    _ => panic!()
+                };
+                match *body {
+                    Stmt::Block { stmts } => {
+                        let stmt = &**stmts.iter().next().unwrap();
+                        match stmt {
+                            &Stmt::Return { ref expr } => {
+                                match **expr {
+                                    Expr::Literal { ref value } => assert_eq!(value,
+                                                                              &Token::new(TokenType::Float,
+                                                                                          Some(TokenLiteral::Float(1.0)),
+                                                                                          1)),
+                                    _ => panic!()
+                                }
+                            }
+                            _ => panic!()
+                        }
+                    }
+                    _ => panic!()
+                }
+            }
             _ => panic!()
         }
     }
