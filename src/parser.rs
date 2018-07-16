@@ -3,7 +3,7 @@ use lexer::Lexer;
 use token::Token;
 use token::TokenType;
 
-struct Parser<'a> {
+pub struct Parser<'a> {
     lexer: Lexer<'a>,
     unused_lookahead: Option<Token>,
     had_error: bool,
