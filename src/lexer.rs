@@ -75,7 +75,7 @@ impl<'a> Lexer<'a> {
                 }
             }
             '\n' => {
-                self.curr_line = self.curr_line + 1;
+                self.curr_line += 1;
                 Some(Token::new(TokenType::EOL, None, self.curr_line - 1))
             }
             '\r' => {
@@ -86,7 +86,7 @@ impl<'a> Lexer<'a> {
                                             self.curr_line)),
                     Some(ch) => match ch {
                         '\n' => {
-                            self.curr_line = self.curr_line + 1;
+                            self.curr_line += 1;
                             Some(Token::new(TokenType::EOL, None, self.curr_line - 1))
                         }
                         _ => {

@@ -21,11 +21,14 @@ fn main() {
             .required(false)
             .index(1))
         .get_matches();
+
     let pretty_print = matches.is_present("pp");
-    match pretty_print {
-        true => println!("Pretty printing enabled"),
-        false => println!("Pretty printing disabled")
+    if pretty_print {
+        println!("Pretty printing enabled");
+    } else {
+        println!("Pretty printing disabled")
     }
+
     match matches.value_of("input") {
         None => exec_repl(pretty_print),
         Some(input) => exec_input(pretty_print, input.to_string())

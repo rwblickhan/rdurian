@@ -37,7 +37,7 @@ impl<'a> Parser<'a> {
             Some(stmt) => {
                 match self.get_next_token(false)? {
                     Some(ref token) if !token.token_type.eq(&TokenType::EOL) =>
-                        return Err(SyntaxError::new("No newline at end of statement.".to_string(),
+                        Err(SyntaxError::new("No newline at end of statement.".to_string(),
                                                     Some(token.clone()))),
                     _ => Ok(Some(stmt))
                 }
@@ -76,7 +76,7 @@ impl<'a> Parser<'a> {
                 };
 
                 match self.parse_block_stmt()? {
-                    None => return Err(SyntaxError::new("While statement missing body.".to_string(),
+                    None => Err(SyntaxError::new("While statement missing body.".to_string(),
                                                         Some(opening_brace))),
                     Some(stmt) => Ok(Some(Stmt::While { cond: Box::new(cond), body: Box::new(stmt) }))
                 }
@@ -100,16 +100,16 @@ impl<'a> Parser<'a> {
                     _ => ()
                 };
                 match self.parse_expr()? {
-                    None => return Err(SyntaxError::new("Let statement missing assignment expression.".to_string(),
+                    None => Err(SyntaxError::new("Let statement missing assignment expression.".to_string(),
                                                         Some(curr_token))),
                     Some(expr) => Ok(Some(Stmt::Let { ident: Box::new(ident), expr: Box::new(expr) }))
                 }
             }
             TokenType::Print => {
                 match self.parse_expr() {
-                    Err(e) => return Err(e),
+                    Err(e) => Err(e),
                     Ok(opt_expr) => match opt_expr {
-                        None => return Err(SyntaxError::new("Print statement missing expression.".to_string(),
+                        None => Err(SyntaxError::new("Print statement missing expression.".to_string(),
                                                             Some(curr_token))),
                         Some(expr) => Ok(Some(Stmt::Print { expr: Box::new(expr) }))
                     }
@@ -117,21 +117,21 @@ impl<'a> Parser<'a> {
             }
             TokenType::Err => {
                 match self.parse_expr()? {
-                    None => return Err(SyntaxError::new("Err statement missing expression.".to_string(),
+                    None => Err(SyntaxError::new("Err statement missing expression.".to_string(),
                                                         Some(curr_token))),
                     Some(expr) => Ok(Some(Stmt::Err { expr: Box::new(expr) }))
                 }
             }
             TokenType::Scan => {
                 match self.parse_ident()? {
-                    None => return Err(SyntaxError::new("Scan statement missing identifier.".to_string(),
+                    None => Err(SyntaxError::new("Scan statement missing identifier.".to_string(),
                                                         Some(curr_token))),
                     Some(expr) => Ok(Some(Stmt::Scan { ident: Box::new(expr) }))
                 }
             }
             TokenType::Return => {
                 match self.parse_expr()? {
-                    None => return Err(SyntaxError::new("Return statement missing expression.".to_string(),
+                    None => Err(SyntaxError::new("Return statement missing expression.".to_string(),
                                                         Some(curr_token))),
                     Some(expr) => Ok(Some(Stmt::Return { expr: Box::new(expr) }))
                 }
@@ -201,7 +201,7 @@ impl<'a> Parser<'a> {
                     None => Ok(Some(Stmt::Expr { expr: Box::new(expr) })),
                     Some(token) => match token.token_type {
                         TokenType::Equal => match self.parse_expr()? {
-                            None => return Ok(None),
+                            None => Ok(None),
                             Some(assign) => Ok(Some(Stmt::Assign {
                                 ident: Box::new(expr),
                                 expr: Box::new(assign),
@@ -480,28 +480,28 @@ impl<'a> Parser<'a> {
         match curr_token.token_type {
             TokenType::Plus => {
                 match self.parse_unary_expr()? {
-                    None => return Err(SyntaxError::new("Plus unary expression missing operand.".to_string(),
+                    None => Err(SyntaxError::new("Plus unary expression missing operand.".to_string(),
                                                         Some(curr_token))),
                     Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
                 }
             }
             TokenType::Minus => {
                 match self.parse_unary_expr()? {
-                    None => return Err(SyntaxError::new("Minus unary expression missing operand.".to_string(),
+                    None => Err(SyntaxError::new("Minus unary expression missing operand.".to_string(),
                                                         Some(curr_token))),
                     Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
                 }
             }
             TokenType::Bang => {
                 match self.parse_unary_expr()? {
-                    None => return Err(SyntaxError::new("Negate unary expression missing operand.".to_string(),
+                    None => Err(SyntaxError::new("Negate unary expression missing operand.".to_string(),
                                                         Some(curr_token))),
                     Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
                 }
             }
             TokenType::Ampersand => {
                 match self.parse_unary_expr()? {
-                    None => return Err(SyntaxError::new("Stringify unary expression missing operand.".to_string(),
+                    None => Err(SyntaxError::new("Stringify unary expression missing operand.".to_string(),
                                                         Some(curr_token))),
                     Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
                 }
