@@ -1,7 +1,6 @@
 use ast::*;
 use lexer::Lexer;
 use token::Token;
-use token::TokenType;
 
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
@@ -36,10 +35,12 @@ impl<'a> Parser<'a> {
             None => Ok(None),
             Some(stmt) => {
                 match self.get_next_token(false)? {
-                    Some(ref token) if !token.token_type.eq(&TokenType::EOL) =>
-                        Err(SyntaxError::new("No newline at end of statement.".to_string(),
-                                                    Some(token.clone()))),
-                    _ => Ok(Some(stmt))
+                    Some(ref token) => match *token {
+                        Token::EOL(_line) => Ok(Some(stmt)),
+                        _ => Err(SyntaxError::new("No newline at end of statement.".to_string(),
+                                                  Some(token.clone()))),
+                    }
+                    _ => Err(SyntaxError::new("No newline at end of file.".to_string(), None))
                 }
             }
         }
@@ -50,17 +51,17 @@ impl<'a> Parser<'a> {
             None => return Ok(None),
             Some(token) => token
         };
-        match curr_token.token_type {
-            TokenType::SyntaxError => Err(SyntaxError::new("Syntax error while lexing.".to_string(),
-                                                           Some(curr_token))),
-            TokenType::EOL => self.parse_stmt(),
-            TokenType::LeftBrace => self.parse_block_stmt(),
-            TokenType::If => self.parse_if_stmt(&curr_token),
-            TokenType::Elif => Err(SyntaxError::new("Found elif with no matching if.".to_string(),
-                                                    Some(curr_token))),
-            TokenType::Else => Err(SyntaxError::new("Found else with no matching if.".to_string(),
-                                                    Some(curr_token))),
-            TokenType::While => {
+        match curr_token {
+            Token::SyntaxError { .. } => Err(SyntaxError::new("Syntax error while lexing.".to_string(),
+                                                              Some(curr_token.clone()))),
+            Token::EOL(_line) => self.parse_stmt(),
+            Token::LeftBrace(_line) => self.parse_block_stmt(),
+            Token::If(_line) => self.parse_if_stmt(&curr_token),
+            Token::Elif(_line) => Err(SyntaxError::new("Found elif with no matching if.".to_string(),
+                                                       Some(curr_token))),
+            Token::Else(_line) => Err(SyntaxError::new("Found else with no matching if.".to_string(),
+                                                       Some(curr_token))),
+            Token::While(_line) => {
                 let cond = match self.parse_expr()? {
                     None => return Err(SyntaxError::new("While statement missing condition expression.".to_string(),
                                                         Some(curr_token))),
@@ -70,24 +71,26 @@ impl<'a> Parser<'a> {
                 let opening_brace = match self.get_next_token(false)? {
                     None => return Err(SyntaxError::new("Expected beginning of block statement but found end of file.".to_string(),
                                                         None)),
-                    Some(ref token) if !token.token_type.eq(&TokenType::LeftBrace) => return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
-                                                                                                                  Some(token.clone()))),
-                    Some(ref token) => token.clone()
+                    Some(ref token) => match *token {
+                        Token::LeftBrace(_line) => token.clone(),
+                        _ => return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
+                                                         Some(token.clone())))
+                    }
                 };
 
                 match self.parse_block_stmt()? {
                     None => Err(SyntaxError::new("While statement missing body.".to_string(),
-                                                        Some(opening_brace))),
+                                                 Some(opening_brace))),
                     Some(stmt) => Ok(Some(Stmt::While { cond: Box::new(cond), body: Box::new(stmt) }))
                 }
             }
-            TokenType::Next => {
+            Token::Next(_line) => {
                 Ok(Some(Stmt::Next))
             }
-            TokenType::Break => {
+            Token::Break(_line) => {
                 Ok(Some(Stmt::Break))
             }
-            TokenType::Let => {
+            Token::Let(_line) => {
                 let ident = match self.parse_ident()? {
                     None => return Err(SyntaxError::new("Let statement missing identifier.".to_string(),
                                                         Some(curr_token))),
@@ -95,48 +98,50 @@ impl<'a> Parser<'a> {
                 };
                 match self.get_next_token(false)? {
                     None => return Err(SyntaxError::new("Let statement missing =.".to_string(), Some(curr_token))),
-                    Some(ref token) if !token.token_type.eq(&TokenType::Equal) => return Err(SyntaxError::new("Let statement identifier followed by invalid token.".to_string(),
-                                                                                                              Some(token.clone()))),
-                    _ => ()
+                    Some(ref token) => match *token {
+                        Token::Equal(_line) => (),
+                        _ => return Err(SyntaxError::new("Let statement identifier followed by invalid token.".to_string(),
+                                                         Some(token.clone()))),
+                    }
                 };
                 match self.parse_expr()? {
                     None => Err(SyntaxError::new("Let statement missing assignment expression.".to_string(),
-                                                        Some(curr_token))),
+                                                 Some(curr_token))),
                     Some(expr) => Ok(Some(Stmt::Let { ident: Box::new(ident), expr: Box::new(expr) }))
                 }
             }
-            TokenType::Print => {
+            Token::Print(_line) => {
                 match self.parse_expr() {
                     Err(e) => Err(e),
                     Ok(opt_expr) => match opt_expr {
                         None => Err(SyntaxError::new("Print statement missing expression.".to_string(),
-                                                            Some(curr_token))),
+                                                     Some(curr_token))),
                         Some(expr) => Ok(Some(Stmt::Print { expr: Box::new(expr) }))
                     }
                 }
             }
-            TokenType::Err => {
+            Token::Err(_line) => {
                 match self.parse_expr()? {
                     None => Err(SyntaxError::new("Err statement missing expression.".to_string(),
-                                                        Some(curr_token))),
+                                                 Some(curr_token))),
                     Some(expr) => Ok(Some(Stmt::Err { expr: Box::new(expr) }))
                 }
             }
-            TokenType::Scan => {
+            Token::Scan(_line) => {
                 match self.parse_ident()? {
                     None => Err(SyntaxError::new("Scan statement missing identifier.".to_string(),
-                                                        Some(curr_token))),
+                                                 Some(curr_token))),
                     Some(expr) => Ok(Some(Stmt::Scan { ident: Box::new(expr) }))
                 }
             }
-            TokenType::Return => {
+            Token::Return(_line) => {
                 match self.parse_expr()? {
                     None => Err(SyntaxError::new("Return statement missing expression.".to_string(),
-                                                        Some(curr_token))),
+                                                 Some(curr_token))),
                     Some(expr) => Ok(Some(Stmt::Return { expr: Box::new(expr) }))
                 }
             }
-            TokenType::Def => {
+            Token::Def(_line) => {
                 let ident = match self.parse_ident() {
                     Err(e) => return Err(e),
                     Ok(opt_expr) => match opt_expr {
@@ -148,44 +153,48 @@ impl<'a> Parser<'a> {
                 match self.get_next_token(false)? {
                     None => return Err(SyntaxError::new("Function definition missing (.".to_string(),
                                                         Some(curr_token))),
-                    Some(ref token) if !token.token_type.eq(&TokenType::LeftParen) => return Err(SyntaxError::new("Function definition missing (.".to_string(),
-                                                                                                                  Some(token.clone()))),
-                    _ => ()
+                    Some(ref token) => match *token {
+                        Token::LeftParen(_line) => (),
+                        _ => return Err(SyntaxError::new("Function definition missing (.".to_string(),
+                                                         Some(token.clone()))),
+                    }
                 };
                 let mut params = Vec::new();
                 while let Some(curr_token) = self.get_next_token(false)? {
-                    if curr_token.token_type.eq(&TokenType::Comma) {
-                        // TODO ugly hack that technically doesn't meet the spec
-                        continue;
-                    }
-                    if curr_token.token_type.eq(&TokenType::RightParen) {
-                        let token = match self.get_next_token(false)? {
-                            None => return Err(SyntaxError::new("Expected beginning of block statement but found end of file.".to_string(),
-                                                                None)),
-                            Some(token) => token
-                        };
-                        if !token.token_type.eq(&TokenType::LeftBrace) {
-                            return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
-                                                        Some(token)));
-                        }
+                    match curr_token {
+                        Token::Comma(_line) => continue,
+                        Token::RightParen(_line) => {
+                            let token = match self.get_next_token(false)? {
+                                None => return Err(SyntaxError::new("Expected beginning of block statement but found end of file.".to_string(),
+                                                                    None)),
+                                Some(token) => token
+                            };
 
-                        match self.parse_block_stmt()? {
-                            None => return Err(SyntaxError::new("While statement missing body.".to_string(),
-                                                                Some(curr_token))),
-                            Some(stmt) => return Ok(Some(Stmt::FnDecl {
-                                ident: Box::new(ident),
-                                params,
-                                body: Box::new(stmt),
-                            }))
+                            match token {
+                                Token::LeftBrace(_line) => (),
+                                _ => return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
+                                                                 Some(token)))
+                            };
+
+                            match self.parse_block_stmt()? {
+                                None => return Err(SyntaxError::new("While statement missing body.".to_string(),
+                                                                    Some(curr_token))),
+                                Some(stmt) => return Ok(Some(Stmt::FnDecl {
+                                    ident: Box::new(ident),
+                                    params,
+                                    body: Box::new(stmt),
+                                }))
+                            }
                         }
-                    } else {
-                        self.unused_lookahead = Some(curr_token.clone());
-                        let param = match self.parse_ident()? {
-                            None => return Err(SyntaxError::new("Function definition parameter not a valid lvalue.".to_string(),
-                                                                Some(curr_token.clone()))),
-                            Some(expr) => expr
-                        };
-                        params.push(Box::new(param));
+                        _ => {
+                            self.unused_lookahead = Some(curr_token.clone());
+                            let param = match self.parse_ident()? {
+                                None => return Err(SyntaxError::new("Function definition parameter not a valid lvalue.".to_string(),
+                                                                    Some(curr_token.clone()))),
+                                Some(expr) => expr
+                            };
+                            params.push(Box::new(param));
+                        }
                     }
                 }
                 Err(SyntaxError::new("Unterminated function parameter list.".to_string(),
@@ -199,8 +208,8 @@ impl<'a> Parser<'a> {
                 };
                 match self.get_next_token(true)? {
                     None => Ok(Some(Stmt::Expr { expr: Box::new(expr) })),
-                    Some(token) => match token.token_type {
-                        TokenType::Equal => match self.parse_expr()? {
+                    Some(token) => match token {
+                        Token::Equal(_line) => match self.parse_expr()? {
                             None => Ok(None),
                             Some(assign) => Ok(Some(Stmt::Assign {
                                 ident: Box::new(expr),
@@ -227,9 +236,11 @@ impl<'a> Parser<'a> {
         match self.get_next_token(false)? {
             None => return Err(SyntaxError::new("Expected beginning of block statement but found end of file.".to_string(),
                                                 None)),
-            Some(ref token) if !token.token_type.eq(&TokenType::LeftBrace) => return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
-                                                                                                          Some(token.clone()))),
-            _ => ()
+            Some(ref token) => match *token {
+                Token::LeftBrace(_line) => (),
+                _ => return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
+                                                 Some(token.clone()))),
+            }
         };
 
         let body = match self.parse_block_stmt()? {
@@ -243,8 +254,8 @@ impl<'a> Parser<'a> {
             Some(token) => token
         };
 
-        match next_token.token_type {
-            TokenType::Elif => {
+        match next_token {
+            Token::Elif(_line) => {
                 let elif_stmt = match self.parse_if_stmt(&next_token)? {
                     None => return Err(SyntaxError::new("Elif missing body.".to_string(), Some(next_token))),
                     Some(stmt) => stmt
@@ -255,13 +266,15 @@ impl<'a> Parser<'a> {
                     false_body: Some(Box::new(elif_stmt)),
                 }))
             }
-            TokenType::Else => {
+            Token::Else(_line) => {
                 match self.get_next_token(false)? {
                     None => return Err(SyntaxError::new("Expected beginning of block statement but found end of file.".to_string(),
                                                         None)),
-                    Some(ref token) if !token.token_type.eq(&TokenType::LeftBrace) => return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
-                                                                                                                  Some(token.clone()))),
-                    _ => ()
+                    Some(ref token) => match *token {
+                        Token::LeftBrace(_line) => (),
+                        _ => return Err(SyntaxError::new("Block statement missing opening brace.".to_string(),
+                                                         Some(token.clone()))),
+                    }
                 };
 
                 let false_body = match self.parse_block_stmt()? {
@@ -288,16 +301,18 @@ impl<'a> Parser<'a> {
                                                 None)),
             Some(token) => token
         };
-        match token.token_type {
-            TokenType::EOL => {
+        match token {
+            Token::EOL(_line) => {
                 // multi-line block statement
                 while let Some(stmt) = self.parse()? {
                     stmts.push(Box::new(stmt));
                     match self.get_next_token(false)? {
                         None => return Err(SyntaxError::new("Unterminated block statement.".to_string(),
                                                             None)),
-                        Some(ref token) if token.token_type.eq(&TokenType::RightBrace) => break,
-                        Some(ref token) => self.unused_lookahead = Some(token.clone())
+                        Some(ref token) => match *token {
+                            Token::RightBrace(_line) => break,
+                            _ => self.unused_lookahead = Some(token.clone())
+                        }
                     };
                 }
             }
@@ -312,9 +327,11 @@ impl<'a> Parser<'a> {
                         match self.get_next_token(false)? {
                             None => return Err(SyntaxError::new("Unterminated block statement.".to_string(),
                                                                 None)),
-                            Some(ref token) if !token.token_type.eq(&TokenType::RightBrace) => return Err(SyntaxError::new("Block statement missing closing brace.".to_string(),
-                                                                                                                           Some(token.clone()))),
-                            _ => ()
+                            Some(ref token) => match *token {
+                                Token::RightBrace(_line) => (),
+                                _ => return Err(SyntaxError::new("Block statement missing closing brace.".to_string(),
+                                                                 Some(token.clone()))),
+                            }
                         };
                     }
                 }
@@ -334,16 +351,20 @@ impl<'a> Parser<'a> {
             Some(expr) => expr
         };
         while let Some(operator) = self.get_next_token(true)? {
-            if !operator.token_type.eq(&TokenType::Or) {
-                self.unused_lookahead = Some(operator);
-                break;
+            match operator {
+                Token::Or(_line) => {
+                    let right = match self.parse_and_expr()? {
+                        None => return Err(SyntaxError::new("Or expression missing right side.".to_string(),
+                                                            Some(operator))),
+                        Some(expr) => expr
+                    };
+                    expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
+                }
+                _ => {
+                    self.unused_lookahead = Some(operator);
+                    break;
+                }
             }
-            let right = match self.parse_and_expr()? {
-                None => return Err(SyntaxError::new("Or expression missing right side.".to_string(),
-                                                    Some(operator))),
-                Some(expr) => expr
-            };
-            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
         }
         Ok(Some(expr))
     }
@@ -354,16 +375,20 @@ impl<'a> Parser<'a> {
             Some(expr) => expr
         };
         while let Some(operator) = self.get_next_token(true)? {
-            if !operator.token_type.eq(&TokenType::And) {
-                self.unused_lookahead = Some(operator);
-                break;
+            match operator {
+                Token::And(_line) => {
+                    let right = match self.parse_eq_expr()? {
+                        None => return Err(SyntaxError::new("And expression missing right side.".to_string(),
+                                                            Some(operator))),
+                        Some(expr) => expr
+                    };
+                    expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
+                }
+                _ => {
+                    self.unused_lookahead = Some(operator);
+                    break;
+                }
             }
-            let right = match self.parse_eq_expr()? {
-                None => return Err(SyntaxError::new("And expression missing right side.".to_string(),
-                                                    Some(operator))),
-                Some(expr) => expr
-            };
-            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
         }
         Ok(Some(expr))
     }
@@ -374,16 +399,20 @@ impl<'a> Parser<'a> {
             Some(expr) => expr
         };
         while let Some(operator) = self.get_next_token(true)? {
-            if !operator.token_type.eq(&TokenType::EqualEqual) && !operator.token_type.eq(&TokenType::BangEqual) {
-                self.unused_lookahead = Some(operator);
-                break;
+            match operator {
+                Token::EqualEqual(_line) | Token::BangEqual(_line) => {
+                    let right = match self.parse_comp_expr()? {
+                        None => return Err(SyntaxError::new("Equality comparison missing right side.".to_string(),
+                                                            Some(operator))),
+                        Some(expr) => expr
+                    };
+                    expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
+                }
+                _ => {
+                    self.unused_lookahead = Some(operator);
+                    break;
+                }
             }
-            let right = match self.parse_comp_expr()? {
-                None => return Err(SyntaxError::new("Equality comparison missing right side.".to_string(),
-                                                    Some(operator))),
-                Some(expr) => expr
-            };
-            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
         }
         Ok(Some(expr))
     }
@@ -394,19 +423,23 @@ impl<'a> Parser<'a> {
             Some(expr) => expr
         };
         while let Some(operator) = self.get_next_token(true)? {
-            if !operator.token_type.eq(&TokenType::GreaterEqual)
-                && !operator.token_type.eq(&TokenType::Greater)
-                && !operator.token_type.eq(&TokenType::LesserEqual)
-                && !operator.token_type.eq(&TokenType::Lesser) {
-                self.unused_lookahead = Some(operator);
-                break;
+            match operator {
+                Token::Greater(_line) |
+                Token::GreaterEqual(_line) |
+                Token::Lesser(_line) |
+                Token::LesserEqual(_line) => {
+                    let right = match self.parse_concat_expr()? {
+                        None => return Err(SyntaxError::new("Comparison operator missing right side.".to_string(),
+                                                            Some(operator))),
+                        Some(expr) => expr
+                    };
+                    expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
+                }
+                _ => {
+                    self.unused_lookahead = Some(operator);
+                    break;
+                }
             }
-            let right = match self.parse_concat_expr()? {
-                None => return Err(SyntaxError::new("Comparison operator missing right side.".to_string(),
-                                                    Some(operator))),
-                Some(expr) => expr
-            };
-            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
         }
         Ok(Some(expr))
     }
@@ -417,16 +450,20 @@ impl<'a> Parser<'a> {
             Some(expr) => expr
         };
         while let Some(operator) = self.get_next_token(true)? {
-            if !operator.token_type.eq(&TokenType::Ampersand) {
-                self.unused_lookahead = Some(operator);
-                break;
+            match operator {
+                Token::Ampersand(_line) => {
+                    let right = match self.parse_add_expr()? {
+                        None => return Err(SyntaxError::new("Concatenation expression missing right side.".to_string(),
+                                                            Some(operator))),
+                        Some(expr) => expr
+                    };
+                    expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
+                }
+                _ => {
+                    self.unused_lookahead = Some(operator);
+                    break;
+                }
             }
-            let right = match self.parse_add_expr()? {
-                None => return Err(SyntaxError::new("Concatenation expression missing right side.".to_string(),
-                                                    Some(operator))),
-                Some(expr) => expr
-            };
-            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
         }
         Ok(Some(expr))
     }
@@ -437,16 +474,20 @@ impl<'a> Parser<'a> {
             Some(expr) => expr
         };
         while let Some(operator) = self.get_next_token(true)? {
-            if !operator.token_type.eq(&TokenType::Plus) && !operator.token_type.eq(&TokenType::Minus) {
-                self.unused_lookahead = Some(operator);
-                break;
+            match operator {
+                Token::Plus(_line) | Token::Minus(_line) => {
+                    let right = match self.parse_mul_expr()? {
+                        None => return Err(SyntaxError::new("Expression missing right side.".to_string(),
+                                                            Some(operator))),
+                        Some(expr) => expr
+                    };
+                    expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
+                }
+                _ => {
+                    self.unused_lookahead = Some(operator);
+                    break;
+                }
             }
-            let right = match self.parse_mul_expr()? {
-                None => return Err(SyntaxError::new("Expression missing right side.".to_string(),
-                                                    Some(operator))),
-                Some(expr) => expr
-            };
-            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
         }
         Ok(Some(expr))
     }
@@ -457,16 +498,20 @@ impl<'a> Parser<'a> {
             Some(expr) => expr
         };
         while let Some(operator) = self.get_next_token(true)? {
-            if !operator.token_type.eq(&TokenType::Star) && !operator.token_type.eq(&TokenType::Slash) {
-                self.unused_lookahead = Some(operator);
-                break;
+            match operator {
+                Token::Star(_line) | Token::Slash(_line) => {
+                    let right = match self.parse_unary_expr()? {
+                        None => return Err(SyntaxError::new("Expression missing right side.".to_string(),
+                                                            Some(operator))),
+                        Some(expr) => expr
+                    };
+                    expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
+                }
+                _ => {
+                    self.unused_lookahead = Some(operator);
+                    break;
+                }
             }
-            let right = match self.parse_unary_expr()? {
-                None => return Err(SyntaxError::new("Expression missing right side.".to_string(),
-                                                    Some(operator))),
-                Some(expr) => expr
-            };
-            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
         }
         Ok(Some(expr))
     }
@@ -477,86 +522,90 @@ impl<'a> Parser<'a> {
             Some(token) => token
         };
 
-        match curr_token.token_type {
-            TokenType::Plus => {
+        match curr_token {
+            Token::Plus(_line) => {
                 match self.parse_unary_expr()? {
                     None => Err(SyntaxError::new("Plus unary expression missing operand.".to_string(),
-                                                        Some(curr_token))),
+                                                 Some(curr_token))),
                     Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
                 }
             }
-            TokenType::Minus => {
+            Token::Minus(_line) => {
                 match self.parse_unary_expr()? {
                     None => Err(SyntaxError::new("Minus unary expression missing operand.".to_string(),
-                                                        Some(curr_token))),
+                                                 Some(curr_token))),
                     Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
                 }
             }
-            TokenType::Bang => {
+            Token::Bang(_line) => {
                 match self.parse_unary_expr()? {
                     None => Err(SyntaxError::new("Negate unary expression missing operand.".to_string(),
-                                                        Some(curr_token))),
+                                                 Some(curr_token))),
                     Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
                 }
             }
-            TokenType::Ampersand => {
+            Token::Ampersand(_line) => {
                 match self.parse_unary_expr()? {
                     None => Err(SyntaxError::new("Stringify unary expression missing operand.".to_string(),
-                                                        Some(curr_token))),
+                                                 Some(curr_token))),
                     Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
                 }
             }
-            TokenType::LeftParen => {
+            Token::LeftParen(_line) => {
                 match self.parse_expr()? {
                     None => Err(SyntaxError::new("Unexpected end of file.".to_string(),
                                                  Some(curr_token))),
                     Some(expr) => {
                         match self.get_next_token(false)? {
-                            Some(ref token) if token.token_type.eq(&TokenType::RightParen) =>
-                                Ok(Some(Expr::Grouping { expr: Box::new(expr) })),
-                            _ => Err(SyntaxError::new("Unexpected end of grouping.".to_string(),
-                                                      Some(curr_token))),
+                            Some(ref token) => match *token {
+                                Token::RightParen(_line) => Ok(Some(Expr::Grouping { expr: Box::new(expr) })),
+                                _ => Err(SyntaxError::new("Unexpected end of grouping.".to_string(),
+                                                          Some(curr_token))),
+                            }
+                            _ => Err(SyntaxError::new("Unexpected end of file.".to_string(), None))
                         }
                     }
                 }
             }
-            TokenType::String => Ok(Some(Expr::Literal { value: curr_token })),
-            TokenType::Integer => Ok(Some(Expr::Literal { value: curr_token })),
-            TokenType::Float => Ok(Some(Expr::Literal { value: curr_token })),
-            TokenType::True => Ok(Some(Expr::Literal { value: curr_token })),
-            TokenType::False => Ok(Some(Expr::Literal { value: curr_token })),
-            TokenType::Identifier => {
-                self.unused_lookahead = Some(curr_token);
+            Token::String { .. } => Ok(Some(Expr::Literal { value: curr_token.clone() })),
+            Token::Integer { .. } => Ok(Some(Expr::Literal { value: curr_token.clone() })),
+            Token::Float { .. } => Ok(Some(Expr::Literal { value: curr_token.clone() })),
+            Token::True(_line) => Ok(Some(Expr::Literal { value: curr_token })),
+            Token::False(_line) => Ok(Some(Expr::Literal { value: curr_token })),
+            Token::Identifier { .. } => {
+                self.unused_lookahead = Some(curr_token.clone());
                 match self.parse_ident()? {
                     None => Ok(None),
                     Some(ident) => {
                         match self.get_next_token(true)? {
                             None => Ok(Some(ident)),
-                            Some(ref token) if token.token_type.eq(&TokenType::LeftParen) => {
-                                // function call
-                                let mut args = Vec::new();
-                                while let Some(curr_token) = self.get_next_token(false)? {
-                                    match curr_token.token_type {
-                                        TokenType::Comma => continue,
-                                        TokenType::RightParen => return Ok(Some(Expr::FnCall { ident: Box::new(ident), args })),
-                                        _ => {
-                                            self.unused_lookahead = Some(curr_token.clone());
-                                            let param = match self.parse_ident()? {
-                                                None => return Err(SyntaxError::new(
-                                                    "Function call argument not a valid lvalue.".to_string(),
-                                                    Some(curr_token))),
-                                                Some(expr) => expr
-                                            };
-                                            args.push(Box::new(param));
+                            Some(ref token) => match *token {
+                                Token::LeftParen(_line) => {
+                                    // function call
+                                    let mut args = Vec::new();
+                                    while let Some(curr_token) = self.get_next_token(false)? {
+                                        match curr_token {
+                                            Token::Comma(_line) => continue,
+                                            Token::RightParen(_line) => return Ok(Some(Expr::FnCall { ident: Box::new(ident), args })),
+                                            _ => {
+                                                self.unused_lookahead = Some(curr_token.clone());
+                                                let param = match self.parse_ident()? {
+                                                    None => return Err(SyntaxError::new(
+                                                        "Function call argument not a valid lvalue.".to_string(),
+                                                        Some(curr_token))),
+                                                    Some(expr) => expr
+                                                };
+                                                args.push(Box::new(param));
+                                            }
                                         }
                                     }
+                                    Err(SyntaxError::new("Unterminated function call parameter list.".to_string(),
+                                                         Some(token.clone())))
                                 }
-                                Err(SyntaxError::new("Unterminated function call parameter list.".to_string(),
-                                                     Some(token.clone())))
-                            }
-                            Some(ref token) => {
-                                self.unused_lookahead = Some(token.clone());
-                                Ok(Some(ident))
+                                _ => {
+                                    self.unused_lookahead = Some(token.clone());
+                                    Ok(Some(ident))
+                                }
                             }
                         }
                     }
@@ -576,53 +625,53 @@ impl<'a> Parser<'a> {
         };
         self.unused_lookahead = None;
 
-        if curr_token.token_type.eq(&TokenType::Identifier) {
-            return Ok(Some(Expr::Identifier { ident: curr_token }));
+        match curr_token {
+            Token::Identifier { .. } => Ok(Some(Expr::Identifier { ident: curr_token.clone() })),
+            _ => Err(SyntaxError::new("Expected identifier.".to_string(), Some(curr_token)))
         }
-        Err(SyntaxError::new("Expected identifier.".to_string(), Some(curr_token)))
     }
 
     fn sync(&mut self) {
         while let Some(token) = self.lexer.next() {
-            match token.token_type {
-                TokenType::EOL => return,
-                TokenType::If => {
+            match token {
+                Token::EOL(_line) => return,
+                Token::If(_line) => {
                     self.unused_lookahead = Some(token);
                     return;
                 }
-                TokenType::While => {
+                Token::While(_line) => {
                     self.unused_lookahead = Some(token);
                     return;
                 }
-                TokenType::Next => {
+                Token::Next(_line) => {
                     self.unused_lookahead = Some(token);
                     return;
                 }
-                TokenType::Break => {
+                Token::Break(_line) => {
                     self.unused_lookahead = Some(token);
                     return;
                 }
-                TokenType::Let => {
+                Token::Let(_line) => {
                     self.unused_lookahead = Some(token);
                     return;
                 }
-                TokenType::Print => {
+                Token::Print(_line) => {
                     self.unused_lookahead = Some(token);
                     return;
                 }
-                TokenType::Err => {
+                Token::Err(_line) => {
                     self.unused_lookahead = Some(token);
                     return;
                 }
-                TokenType::Scan => {
+                Token::Scan(_line) => {
                     self.unused_lookahead = Some(token);
                     return;
                 }
-                TokenType::Return => {
+                Token::Return(_line) => {
                     self.unused_lookahead = Some(token);
                     return;
                 }
-                TokenType::Def => {
+                Token::Def(_line) => {
                     self.unused_lookahead = Some(token);
                     return;
                 }
@@ -654,7 +703,6 @@ impl<'a> Iterator for Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use token::TokenLiteral;
 
     #[test]
     fn test_parse_missing_newline() {
@@ -673,19 +721,14 @@ mod tests {
         match parse.next().unwrap() {
             Stmt::If { cond, true_body, false_body } => {
                 match *cond {
-                    Expr::Identifier { ident } => {
-                        assert_eq!(ident,
-                                   Token::new(TokenType::Identifier,
-                                              Some(TokenLiteral::Identifier("a".to_string())),
-                                              0));
-                    }
+                    Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                     _ => panic!()
                 };
                 match *true_body {
                     Stmt::Block { stmts } => {
                         let stmt = &**stmts.iter().next().unwrap();
-                        match stmt {
-                            &Stmt::Break => (),
+                        match *stmt {
+                            Stmt::Break => (),
                             _ => panic!()
                         }
                     }
@@ -706,19 +749,14 @@ mod tests {
         match parse.next().unwrap() {
             Stmt::If { cond, true_body, false_body } => {
                 match *cond {
-                    Expr::Identifier { ident } => {
-                        assert_eq!(ident,
-                                   Token::new(TokenType::Identifier,
-                                              Some(TokenLiteral::Identifier("a".to_string())),
-                                              0));
-                    }
+                    Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                     _ => panic!()
                 };
                 match *true_body {
                     Stmt::Block { stmts } => {
                         let stmt = &**stmts.iter().next().unwrap();
-                        match stmt {
-                            &Stmt::Break => (),
+                        match *stmt {
+                            Stmt::Break => (),
                             _ => panic!()
                         }
                     }
@@ -727,19 +765,14 @@ mod tests {
                 match *false_body.unwrap() {
                     Stmt::If { cond, true_body, false_body } => {
                         match *cond {
-                            Expr::Identifier { ident } => {
-                                assert_eq!(ident,
-                                           Token::new(TokenType::Identifier,
-                                                      Some(TokenLiteral::Identifier("b".to_string())),
-                                                      2));
-                            }
+                            Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 2, literal: "b".to_string() }),
                             _ => panic!()
                         };
                         match *true_body {
                             Stmt::Block { stmts } => {
                                 let stmt = &**stmts.iter().next().unwrap();
-                                match stmt {
-                                    &Stmt::Next => (),
+                                match *stmt {
+                                    Stmt::Next => (),
                                     _ => panic!()
                                 }
                             }
@@ -748,8 +781,8 @@ mod tests {
                         match *false_body.unwrap() {
                             Stmt::Block { stmts } => {
                                 let stmt = &**stmts.iter().next().unwrap();
-                                match stmt {
-                                    &Stmt::Break => return,
+                                match *stmt {
+                                    Stmt::Break => return,
                                     _ => panic!()
                                 }
                             }
@@ -793,19 +826,14 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::While { cond, body } => {
                 match *cond {
-                    Expr::Identifier { ident } => {
-                        assert_eq!(ident,
-                                   Token::new(TokenType::Identifier,
-                                              Some(TokenLiteral::Identifier("a".to_string())),
-                                              0));
-                    }
+                    Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                     _ => panic!()
                 };
                 match *body {
                     Stmt::Block { stmts } => {
                         let stmt = &**stmts.iter().next().unwrap();
-                        match stmt {
-                            &Stmt::Break => return,
+                        match *stmt {
+                            Stmt::Break => return,
                             _ => panic!()
                         }
                     }
@@ -840,27 +868,20 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Let { ident, expr } => {
                 match *ident {
-                    Expr::Identifier { ident } => assert_eq!(ident,
-                                                             Token::new(TokenType::Identifier,
-                                                                        Some(TokenLiteral::Identifier("a".to_string())),
-                                                                        0)),
+                    Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                     _ => panic!()
                 };
                 match *expr {
                     Expr::Binary { ref left, ref operator, ref right } => {
-                        if !operator.eq(&Token::new(TokenType::Plus, None, 0)) {
+                        if !operator.eq(&Token::Plus(0)) {
                             panic!()
                         }
                         match **left {
-                            Expr::Literal { ref value } => assert_eq!(value, &Token::new(TokenType::Integer,
-                                                                                         Some(TokenLiteral::Int(1)),
-                                                                                         0)),
+                            Expr::Literal { ref value } => assert_eq!(*value, Token::Integer { line: 0, literal: 1 }),
                             _ => panic!()
                         };
                         match **right {
-                            Expr::Literal { ref value } => assert_eq!(value, &Token::new(TokenType::Integer,
-                                                                                         Some(TokenLiteral::Int(2)),
-                                                                                         0)),
+                            Expr::Literal { ref value } => assert_eq!(*value, Token::Integer { line: 0, literal: 2 }),
                             _ => panic!()
                         }
                     }
@@ -877,27 +898,22 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Assign { ident, expr } => {
                 match *ident {
-                    Expr::Identifier { ident } => assert_eq!(ident,
-                                                             Token::new(TokenType::Identifier,
-                                                                        Some(TokenLiteral::Identifier("a".to_string())),
-                                                                        0)),
+                    Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                     _ => panic!()
                 };
                 match *expr {
                     Expr::Binary { ref left, ref operator, ref right } => {
-                        if !operator.eq(&Token::new(TokenType::Ampersand, None, 0)) {
+                        if !operator.eq(&Token::Ampersand(0)) {
                             panic!()
                         }
                         match **left {
-                            Expr::Literal { ref value } => assert_eq!(value, &Token::new(TokenType::String,
-                                                                                         Some(TokenLiteral::String("hi ".to_string())),
-                                                                                         0)),
+                            Expr::Literal { ref value } => assert_eq!(*value,
+                                                                      Token::String { line: 0, literal: "hi ".to_string() }),
                             _ => panic!()
                         };
                         match **right {
-                            Expr::Literal { ref value } => assert_eq!(value, &Token::new(TokenType::String,
-                                                                                         Some(TokenLiteral::String("user".to_string())),
-                                                                                         0)),
+                            Expr::Literal { ref value } => assert_eq!(*value,
+                                                                      Token::String { line: 0, literal: "user".to_string() }),
                             _ => panic!()
                         }
                     }
@@ -914,12 +930,7 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Print { expr } => {
                 match *expr {
-                    Expr::Identifier { ident } => {
-                        assert_eq!(ident,
-                                   Token::new(TokenType::Identifier,
-                                              Some(TokenLiteral::Identifier("a".to_string())),
-                                              0));
-                    }
+                    Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                     _ => panic!()
                 }
             }
@@ -933,12 +944,7 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Err { expr } => {
                 match *expr {
-                    Expr::Identifier { ident } => {
-                        assert_eq!(ident,
-                                   Token::new(TokenType::Identifier,
-                                              Some(TokenLiteral::Identifier("a".to_string())),
-                                              0));
-                    }
+                    Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                     _ => panic!()
                 }
             }
@@ -952,12 +958,7 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Scan { ident } => {
                 match *ident {
-                    Expr::Identifier { ident } => {
-                        assert_eq!(ident,
-                                   Token::new(TokenType::Identifier,
-                                              Some(TokenLiteral::Identifier("a".to_string())),
-                                              0));
-                    }
+                    Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                     _ => panic!()
                 }
             }
@@ -971,12 +972,7 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Return { expr } => {
                 match *expr {
-                    Expr::Identifier { ident } => {
-                        assert_eq!(ident,
-                                   Token::new(TokenType::Identifier,
-                                              Some(TokenLiteral::Identifier("a".to_string())),
-                                              0));
-                    }
+                    Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                     _ => panic!()
                 }
             }
@@ -990,26 +986,17 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::FnDecl { ident, params, body } => {
                 match *ident {
-                    Expr::Identifier { ident } => assert_eq!(ident,
-                                                             Token::new(TokenType::Identifier,
-                                                                        Some(TokenLiteral::Identifier("f".to_string())),
-                                                                        0)),
+                    Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "f".to_string() }),
                     _ => panic!()
                 };
                 let mut iter = params.iter();
                 let param_a = &**iter.next().unwrap();
                 match param_a {
                     &Expr::Identifier { ref ident } => {
-                        assert_eq!(ident,
-                                   &Token::new(TokenType::Identifier,
-                                               Some(TokenLiteral::Identifier("a".to_string())),
-                                               0));
+                        assert_eq!(*ident, Token::Identifier { line: 0, literal: "a".to_string() });
                         let param_b = &**iter.next().unwrap();
                         match param_b {
-                            &Expr::Identifier { ref ident } => assert_eq!(ident,
-                                                                          &Token::new(TokenType::Identifier,
-                                                                                      Some(TokenLiteral::Identifier("b".to_string())),
-                                                                                      0)),
+                            &Expr::Identifier { ref ident } => assert_eq!(*ident, Token::Identifier { line: 0, literal: "b".to_string() }),
                             _ => panic!()
                         }
                     }
@@ -1021,10 +1008,8 @@ mod tests {
                         match stmt {
                             &Stmt::Return { ref expr } => {
                                 match **expr {
-                                    Expr::Literal { ref value } => assert_eq!(value,
-                                                                              &Token::new(TokenType::Float,
-                                                                                          Some(TokenLiteral::Float(1.0)),
-                                                                                          1)),
+                                    Expr::Literal { ref value } => assert_eq!(*value,
+                                                                              Token::Float { line: 1, literal: 1.0 }),
                                     _ => panic!()
                                 }
                             }
@@ -1089,8 +1074,7 @@ mod tests {
         let mut parser = Parser::new(Lexer::new("a\n"));
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
-                Expr::Identifier { ident } => assert_eq!(ident, Token::new(TokenType::Identifier,
-                                                                           Some(TokenLiteral::Identifier("a".to_string())), 0)),
+                Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                 _ => panic!()
             },
             _ => panic!()
@@ -1103,14 +1087,12 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
                 Expr::Binary { ref left, ref operator, ref right } => {
-                    if !operator.eq(&Token::new(TokenType::Or, None, 0)) {
+                    if !operator.eq(&Token::Or(0)) {
                         panic!()
                     }
                     match **right {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("c".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "c".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1118,19 +1100,15 @@ mod tests {
                     };
                     match **left {
                         Expr::Binary { ref left, ref operator, ref right } => {
-                            if !operator.eq(&Token::new(TokenType::Or, None, 0)) {
+                            if !operator.eq(&Token::Or(0)) {
                                 panic!()
                             }
                             match **left {
-                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
-                                                                                       Some(TokenLiteral::Identifier("a".to_string())),
-                                                                                       0)) => (),
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) => (),
                                 _ => panic!()
                             };
                             match **right {
-                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
-                                                                                       Some(TokenLiteral::Identifier("b".to_string())),
-                                                                                       0)) => (),
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "b".to_string() }) => (),
                                 _ => panic!()
                             }
                         }
@@ -1149,14 +1127,12 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
                 Expr::Binary { ref left, ref operator, ref right } => {
-                    if !operator.eq(&Token::new(TokenType::And, None, 0)) {
+                    if !operator.eq(&Token::And(0)) {
                         panic!()
                     }
                     match **right {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("c".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "c".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1164,19 +1140,15 @@ mod tests {
                     };
                     match **left {
                         Expr::Binary { ref left, ref operator, ref right } => {
-                            if !operator.eq(&Token::new(TokenType::And, None, 0)) {
+                            if !operator.eq(&Token::And(0)) {
                                 panic!()
                             }
                             match **left {
-                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
-                                                                                       Some(TokenLiteral::Identifier("a".to_string())),
-                                                                                       0)) => (),
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) => (),
                                 _ => panic!()
                             };
                             match **right {
-                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
-                                                                                       Some(TokenLiteral::Identifier("b".to_string())),
-                                                                                       0)) => (),
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "b".to_string() }) => (),
                                 _ => panic!()
                             }
                         }
@@ -1195,14 +1167,12 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
                 Expr::Binary { ref left, ref operator, ref right } => {
-                    if !operator.eq(&Token::new(TokenType::EqualEqual, None, 0)) {
+                    if !operator.eq(&Token::EqualEqual(0)) {
                         panic!()
                     }
                     match **left {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("a".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1210,9 +1180,7 @@ mod tests {
                     };
                     match **right {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("b".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "b".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1231,14 +1199,12 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
                 Expr::Binary { ref left, ref operator, ref right } => {
-                    if !operator.eq(&Token::new(TokenType::BangEqual, None, 0)) {
+                    if !operator.eq(&Token::BangEqual(0)) {
                         panic!()
                     }
                     match **left {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("a".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1246,9 +1212,7 @@ mod tests {
                     };
                     match **right {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("b".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "b".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1267,14 +1231,12 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
                 Expr::Binary { ref left, ref operator, ref right } => {
-                    if !operator.eq(&Token::new(TokenType::Greater, None, 0)) {
+                    if !operator.eq(&Token::Greater(0)) {
                         panic!()
                     }
                     match **left {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("a".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1282,9 +1244,7 @@ mod tests {
                     };
                     match **right {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("b".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "b".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1303,14 +1263,12 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
                 Expr::Binary { ref left, ref operator, ref right } => {
-                    if !operator.eq(&Token::new(TokenType::GreaterEqual, None, 0)) {
+                    if !operator.eq(&Token::GreaterEqual(0)) {
                         panic!()
                     }
                     match **left {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("a".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1318,9 +1276,7 @@ mod tests {
                     };
                     match **right {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("b".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "b".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1339,14 +1295,12 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
                 Expr::Binary { ref left, ref operator, ref right } => {
-                    if !operator.eq(&Token::new(TokenType::Lesser, None, 0)) {
+                    if !operator.eq(&Token::Lesser(0)) {
                         panic!()
                     }
                     match **left {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("a".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1354,9 +1308,7 @@ mod tests {
                     };
                     match **right {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("b".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "b".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1375,14 +1327,12 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
                 Expr::Binary { ref left, ref operator, ref right } => {
-                    if !operator.eq(&Token::new(TokenType::LesserEqual, None, 0)) {
+                    if !operator.eq(&Token::LesserEqual(0)) {
                         panic!()
                     }
                     match **left {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("a".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1390,9 +1340,7 @@ mod tests {
                     };
                     match **right {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("b".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "b".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1411,14 +1359,12 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
                 Expr::Binary { ref left, ref operator, ref right } => {
-                    if !operator.eq(&Token::new(TokenType::Ampersand, None, 0)) {
+                    if !operator.eq(&Token::Ampersand(0)) {
                         panic!()
                     }
                     match **right {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("c".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "c".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1426,19 +1372,15 @@ mod tests {
                     };
                     match **left {
                         Expr::Binary { ref left, ref operator, ref right } => {
-                            if !operator.eq(&Token::new(TokenType::Ampersand, None, 0)) {
+                            if !operator.eq(&Token::Ampersand(0)) {
                                 panic!()
                             }
                             match **left {
-                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
-                                                                                       Some(TokenLiteral::Identifier("a".to_string())),
-                                                                                       0)) => (),
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) => (),
                                 _ => panic!()
                             };
                             match **right {
-                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
-                                                                                       Some(TokenLiteral::Identifier("b".to_string())),
-                                                                                       0)) => (),
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "b".to_string() }) => (),
                                 _ => panic!()
                             }
                         }
@@ -1457,14 +1399,12 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
                 Expr::Binary { ref left, ref operator, ref right } => {
-                    if !operator.eq(&Token::new(TokenType::Plus, None, 0)) {
+                    if !operator.eq(&Token::Plus(0)) {
                         panic!()
                     }
                     match **right {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("c".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "c".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1472,19 +1412,15 @@ mod tests {
                     };
                     match **left {
                         Expr::Binary { ref left, ref operator, ref right } => {
-                            if !operator.eq(&Token::new(TokenType::Plus, None, 0)) {
+                            if !operator.eq(&Token::Plus(0)) {
                                 panic!()
                             }
                             match **left {
-                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
-                                                                                       Some(TokenLiteral::Identifier("a".to_string())),
-                                                                                       0)) => (),
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) => (),
                                 _ => panic!()
                             };
                             match **right {
-                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
-                                                                                       Some(TokenLiteral::Identifier("b".to_string())),
-                                                                                       0)) => (),
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "b".to_string() }) => (),
                                 _ => panic!()
                             }
                         }
@@ -1503,14 +1439,12 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
                 Expr::Binary { ref left, ref operator, ref right } => {
-                    if !operator.eq(&Token::new(TokenType::Minus, None, 0)) {
+                    if !operator.eq(&Token::Minus(0)) {
                         panic!()
                     }
                     match **right {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("c".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "c".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1518,19 +1452,15 @@ mod tests {
                     };
                     match **left {
                         Expr::Binary { ref left, ref operator, ref right } => {
-                            if !operator.eq(&Token::new(TokenType::Minus, None, 0)) {
+                            if !operator.eq(&Token::Minus(0)) {
                                 panic!()
                             }
                             match **left {
-                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
-                                                                                       Some(TokenLiteral::Identifier("a".to_string())),
-                                                                                       0)) => (),
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) => (),
                                 _ => panic!()
                             };
                             match **right {
-                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
-                                                                                       Some(TokenLiteral::Identifier("b".to_string())),
-                                                                                       0)) => (),
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "b".to_string() }) => (),
                                 _ => panic!()
                             }
                         }
@@ -1549,14 +1479,12 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
                 Expr::Binary { ref left, ref operator, ref right } => {
-                    if !operator.eq(&Token::new(TokenType::Star, None, 0)) {
+                    if !operator.eq(&Token::Star(0)) {
                         panic!()
                     }
                     match **right {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("c".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "c".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1564,19 +1492,15 @@ mod tests {
                     };
                     match **left {
                         Expr::Binary { ref left, ref operator, ref right } => {
-                            if !operator.eq(&Token::new(TokenType::Star, None, 0)) {
+                            if !operator.eq(&Token::Star(0)) {
                                 panic!()
                             }
                             match **left {
-                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
-                                                                                       Some(TokenLiteral::Identifier("a".to_string())),
-                                                                                       0)) => (),
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) => (),
                                 _ => panic!()
                             };
                             match **right {
-                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
-                                                                                       Some(TokenLiteral::Identifier("b".to_string())),
-                                                                                       0)) => (),
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "b".to_string() }) => (),
                                 _ => panic!()
                             }
                         }
@@ -1595,14 +1519,12 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
                 Expr::Binary { ref left, ref operator, ref right } => {
-                    if !operator.eq(&Token::new(TokenType::Slash, None, 0)) {
+                    if !operator.eq(&Token::Slash(0)) {
                         panic!()
                     }
                     match **right {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("c".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "c".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1610,19 +1532,15 @@ mod tests {
                     };
                     match **left {
                         Expr::Binary { ref left, ref operator, ref right } => {
-                            if !operator.eq(&Token::new(TokenType::Slash, None, 0)) {
+                            if !operator.eq(&Token::Slash(0)) {
                                 panic!()
                             }
                             match **left {
-                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
-                                                                                       Some(TokenLiteral::Identifier("a".to_string())),
-                                                                                       0)) => (),
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) => (),
                                 _ => panic!()
                             };
                             match **right {
-                                Expr::Identifier { ref ident } if ident.eq(&Token::new(TokenType::Identifier,
-                                                                                       Some(TokenLiteral::Identifier("b".to_string())),
-                                                                                       0)) => (),
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "b".to_string() }) => (),
                                 _ => panic!()
                             }
                         }
@@ -1641,14 +1559,12 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
                 Expr::Unary { ref operator, ref right } => {
-                    if !operator.eq(&Token::new(TokenType::Plus, None, 0)) {
+                    if !operator.eq(&Token::Plus(0)) {
                         panic!()
                     }
                     match **right {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("a".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1667,14 +1583,12 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
                 Expr::Unary { ref operator, ref right } => {
-                    if !operator.eq(&Token::new(TokenType::Minus, None, 0)) {
+                    if !operator.eq(&Token::Minus(0)) {
                         panic!()
                     }
                     match **right {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("a".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) {
                                 panic!()
                             }
                         }
@@ -1693,19 +1607,17 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
                 Expr::Unary { ref operator, ref right } => {
-                    if !operator.eq(&Token::new(TokenType::Bang, None, 0)) {
+                    if !operator.eq(&Token::Bang(0)) {
                         panic!()
                     }
                     match **right {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("a".to_string())),
-                                                     0)) {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) {
                                 panic!()
                             }
                         }
                         _ => panic!()
-                    };
+                    }
                 }
                 _ => panic!()
             },
@@ -1719,15 +1631,13 @@ mod tests {
         match parser.next().unwrap() {
             Stmt::Expr { expr } => match *expr {
                 Expr::Unary { ref operator, ref right } => {
-                    if !operator.eq(&Token::new(TokenType::Ampersand, None, 0)) {
+                    if !operator.eq(&Token::Ampersand(0)) {
                         panic!()
                     }
                     match **right {
                         Expr::Identifier { ref ident } => {
-                            if !ident.eq(&Token::new(TokenType::Identifier,
-                                                     Some(TokenLiteral::Identifier("a".to_string())),
-                                                     0)) {
-                                panic!()
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) {
+                                panic!();
                             }
                         }
                         _ => panic!()
@@ -1746,14 +1656,12 @@ mod tests {
             Stmt::Expr { expr } => match *expr {
                 Expr::Grouping { expr } => match *expr {
                     Expr::Binary { ref left, ref operator, ref right } => {
-                        if !operator.eq(&Token::new(TokenType::Plus, None, 0)) {
+                        if !operator.eq(&Token::Plus(0)) {
                             panic!()
                         }
                         match **left {
                             Expr::Identifier { ref ident } => {
-                                if !ident.eq(&Token::new(TokenType::Identifier,
-                                                         Some(TokenLiteral::Identifier("a".to_string())),
-                                                         0)) {
+                                if !ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) {
                                     panic!()
                                 }
                             }
@@ -1761,9 +1669,7 @@ mod tests {
                         };
                         match **right {
                             Expr::Identifier { ref ident } => {
-                                if !ident.eq(&Token::new(TokenType::Identifier,
-                                                         Some(TokenLiteral::Identifier("b".to_string())),
-                                                         0)) {
+                                if !ident.eq(&Token::Identifier { line: 0, literal: "b".to_string() }) {
                                     panic!()
                                 }
                             }
@@ -1786,24 +1692,18 @@ mod tests {
             Stmt::Expr { expr } => match *expr {
                 Expr::FnCall { ref ident, ref args } => {
                     match **ident {
-                        Expr::Identifier { ref ident } => assert_eq!(ident, &Token::new(TokenType::Identifier,
-                                                                                        Some(TokenLiteral::Identifier("f".to_string())),
-                                                                                        0)),
+                        Expr::Identifier { ref ident } => assert_eq!(*ident, Token::Identifier { line: 0, literal: "f".to_string() }),
                         _ => panic!()
                     }
                     let mut iter = args.iter();
                     let arg_a = &**iter.next().unwrap();
                     match arg_a {
                         &Expr::Identifier { ref ident } => {
-                            assert_eq!(ident, &Token::new(TokenType::Identifier,
-                                                          Some(TokenLiteral::Identifier("a".to_string())),
-                                                          0));
+                            assert_eq!(*ident, Token::Identifier { line: 0, literal: "a".to_string() });
                             let arg_b = &**iter.next().unwrap();
                             match arg_b {
                                 &Expr::Identifier { ref ident } => {
-                                    assert_eq!(ident, &Token::new(TokenType::Identifier,
-                                                                  Some(TokenLiteral::Identifier("b".to_string())),
-                                                                  0));
+                                    assert_eq!(*ident, Token::Identifier { line: 0, literal: "b".to_string() });
                                 }
                                 _ => panic!()
                             }
