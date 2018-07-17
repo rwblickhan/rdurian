@@ -2,8 +2,9 @@ extern crate rdurian;
 extern crate clap;
 
 use clap::{App, Arg};
-use rdurian::parser::Parser;
 use rdurian::lexer::Lexer;
+use rdurian::parser::Parser;
+use rdurian::pretty_printer::*;
 use std::io::{stdin, stdout, Write};
 
 fn main() {
@@ -51,7 +52,7 @@ fn exec_repl(pretty_print: bool) {
         let mut parser = Parser::new(Lexer::new(&buffer));
         while let Some(stmt) = parser.next() {
             if pretty_print {
-                println!("debug: {:?}", stmt);
+                println!("{}", pretty_print_stmt(&stmt));
             }
         }
         print!("> ");
