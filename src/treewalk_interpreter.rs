@@ -1,5 +1,6 @@
 use ast::{Expr, Stmt};
 use std::fmt;
+use std::io::{stderr, stdout, Error, Write};
 use token::Token;
 
 pub struct Interpreter;
@@ -26,6 +27,12 @@ struct RuntimeError {
     error: String
 }
 
+impl From<Error> for RuntimeError {
+    fn from(error: Error) -> Self {
+        RuntimeError { error: error.to_string() }
+    }
+}
+
 impl Interpreter {
     pub fn new() -> Interpreter {
         Interpreter
@@ -40,6 +47,27 @@ impl Interpreter {
 
     fn interp_stmt(&self, stmt: &Stmt) -> Result<String, RuntimeError> {
         match stmt {
+            Stmt::Block {stmts} => {
+                let mut buffer = String::new();
+                for stmt in stmts {
+                    buffer.push_str(&format!("{}\n", self.interp_stmt(stmt)?));
+                }
+                Ok(buffer)
+            }
+            Stmt::Print { expr } => {
+                let expr_obj = self.interp_expr(expr)?;
+                let stdout = stdout();
+                let mut handle = stdout.lock();
+                handle.write(format!("{}\n", expr_obj).as_bytes())?;
+                Ok("stdout done".to_string())
+            }
+            Stmt::Err {expr } => {
+                let expr_obj = self.interp_expr(expr)?;
+                let stderr = stderr();
+                let mut handle = stderr.lock();
+                handle.write(format!("{}\n", expr_obj).as_bytes())?;
+                Ok("stderr done".to_string())
+            }
             Stmt::Expr { expr } => Ok(format!("{}", self.interp_expr(expr)?)),
             _ => Err(RuntimeError { error: "Unimplemented.".to_string() }) // TODO
         }
