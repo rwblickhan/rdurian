@@ -580,28 +580,7 @@ impl<'a> Parser<'a> {
                         match self.get_next_token(true)? {
                             None => Ok(Some(ident)),
                             Some(ref token) => match *token {
-                                Token::LeftParen(_line) => {
-                                    // function call
-                                    let mut args = Vec::new();
-                                    while let Some(curr_token) = self.get_next_token(false)? {
-                                        match curr_token {
-                                            Token::Comma(_line) => continue,
-                                            Token::RightParen(_line) => return Ok(Some(Expr::FnCall { ident: Box::new(ident), args })),
-                                            _ => {
-                                                self.unused_lookahead = Some(curr_token.clone());
-                                                let param = match self.parse_ident()? {
-                                                    None => return Err(SyntaxError::new(
-                                                        "Function call argument not a valid lvalue.".to_string(),
-                                                        Some(curr_token))),
-                                                    Some(expr) => expr
-                                                };
-                                                args.push(Box::new(param));
-                                            }
-                                        }
-                                    }
-                                    Err(SyntaxError::new("Unterminated function call parameter list.".to_string(),
-                                                         Some(token.clone())))
-                                }
+                                Token::LeftParen(_line) => self.parse_fn_call(ident),
                                 _ => {
                                     self.unused_lookahead = Some(token.clone());
                                     Ok(Some(ident))
@@ -613,6 +592,27 @@ impl<'a> Parser<'a> {
             }
             _ => Err(SyntaxError::new("Unexpected token.".to_string(), Some(curr_token)))
         }
+    }
+
+    fn parse_fn_call(&mut self, ident: Expr) -> Result<Option<Expr>, SyntaxError> {
+        let mut args = Vec::new();
+        while let Some(curr_token) = self.get_next_token(false)? {
+            match curr_token {
+                Token::Comma(_line) => continue,
+                Token::RightParen(_line) => return Ok(Some(Expr::FnCall { ident: Box::new(ident), args })),
+                _ => {
+                    self.unused_lookahead = Some(curr_token.clone());
+                    let param = match self.parse_expr()? {
+                        None => return Err(SyntaxError::new(
+                            "Unterminated function call parameter list.".to_string(),
+                            Some(curr_token))),
+                        Some(expr) => expr
+                    };
+                    args.push(Box::new(param));
+                }
+            }
+        }
+        Err(SyntaxError::new("Unterminated function call parameter list.".to_string(), None))
     }
 
     fn parse_ident(&mut self) -> Result<Option<Expr>, SyntaxError> {
