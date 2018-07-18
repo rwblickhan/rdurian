@@ -100,84 +100,14 @@ impl<'a> Lexer<'a> {
                     }
                 }
             }
-            '"' => {
-                let mut lit = String::new();
-                while let Some(ch) = self.iter.next() {
-                    match ch {
-                        '"' => return Some(Token::String {
-                            line: self.curr_line,
-                            literal: lit,
-                        }),
-                        _ => lit.push(ch)
-                    }
-                }
-                Some(Token::SyntaxError {
-                    line: self.curr_line,
-                    error: "Unterminated string literal".to_string(),
-                })
-            }
+            '"' => self.tokenize_string_literal(),
             _ => {
                 let mut lit = String::new();
                 lit.push(c);
                 if c.is_digit(10) {
-                    while let Some(ch) = self.iter.next() {
-                        if ch.is_digit(10) {
-                            lit.push(ch);
-                        } else {
-                            self.unused_lookahead = Some(ch);
-                            break;
-                        }
-                    }
-
-                    if let Some(lookahead) = self.unused_lookahead {
-                        if lookahead.eq(&'.') {
-                            lit.push(lookahead);
-                            match self.iter.next() {
-                                None => return Some(Token::SyntaxError {
-                                    line: self.curr_line,
-                                    error: "Floating point literal missing fractional part".to_string(),
-                                }),
-                                Some(ch) => {
-                                    if !ch.is_digit(10) {
-                                        self.unused_lookahead = Some(ch);
-                                        return Some(Token::SyntaxError {
-                                            line: self.curr_line,
-                                            error: "Floating point literal missing fractional part".to_string(),
-                                        });
-                                    }
-                                    lit.push(ch);
-                                }
-                            }
-                            while let Some(ch) = self.iter.next() {
-                                if ch.is_digit(10) {
-                                    lit.push(ch);
-                                } else {
-                                    self.unused_lookahead = Some(ch);
-                                    break;
-                                }
-                            }
-                            return Some(Token::Float {
-                                line: self.curr_line,
-                                literal: lit.parse().unwrap(),
-                            });
-                        }
-                    }
-
-                    return Some(Token::Integer {
-                        line: self.curr_line,
-                        literal: lit.parse().unwrap(),
-                    });
+                    return self.tokenize_numeric_literal(&mut lit);
                 } else if c.is_alphabetic() {
-                    while let Some(ch) = self.iter.next() {
-                        if ch.is_alphabetic() ||
-                            ch.is_digit(10) ||
-                            ch.eq(&'_') {
-                            lit.push(ch)
-                        } else {
-                            self.unused_lookahead = Some(ch);
-                            break;
-                        }
-                    }
+                    self.scan_into_buffer(&mut lit);
                     if lit.eq(&"and") {
                         return Some(Token::And(self.curr_line));
                     }
@@ -226,15 +156,89 @@ impl<'a> Lexer<'a> {
                     if lit.eq(&"err") {
                         return Some(Token::Err(self.curr_line));
                     }
-                    return Some(Token::Identifier {
-                        line: self.curr_line,
-                        literal: lit,
-                    });
+                    return Some(Token::Identifier { line: self.curr_line, literal: lit });
                 }
                 Some(Token::SyntaxError {
                     line: self.curr_line,
                     error: format!("Unexpected input: {}", c),
                 })
+            }
+        }
+    }
+
+    fn tokenize_string_literal(&mut self) -> Option<Token> {
+        let mut lit = String::new();
+        while let Some(ch) = self.iter.next() {
+            match ch {
+                '"' => return Some(Token::String {
+                    line: self.curr_line,
+                    literal: lit,
+                }),
+                _ => lit.push(ch)
+            }
+        }
+        Some(Token::SyntaxError {
+            line: self.curr_line,
+            error: "Unterminated string literal".to_string(),
+        })
+    }
+
+    fn tokenize_numeric_literal(&mut self, lit: &mut String) -> Option<Token> {
+        while let Some(ch) = self.iter.next() {
+            if ch.is_digit(10) {
+                lit.push(ch);
+            } else {
+                self.unused_lookahead = Some(ch);
+                break;
+            }
+        }
+
+        if let Some(lookahead) = self.unused_lookahead {
+            if lookahead.eq(&'.') {
+                lit.push(lookahead);
+                match self.iter.next() {
+                    None => return Some(Token::SyntaxError {
+                        line: self.curr_line,
+                        error: "Floating point literal missing fractional part".to_string(),
+                    }),
+                    Some(ch) => {
+                        if !ch.is_digit(10) {
+                            self.unused_lookahead = Some(ch);
+                            return Some(Token::SyntaxError {
+                                line: self.curr_line,
+                                error: "Floating point literal missing fractional part".to_string(),
+                            });
+                        }
+                        lit.push(ch);
+                    }
+                }
+                while let Some(ch) = self.iter.next() {
+                    if ch.is_digit(10) {
+                        lit.push(ch);
+                    } else {
+                        self.unused_lookahead = Some(ch);
+                        break;
+                    }
+                }
+                return Some(Token::Float {
+                    line: self.curr_line,
+                    literal: lit.parse().unwrap(),
+                });
+            }
+        }
+
+        Some(Token::Integer { line: self.curr_line, literal: lit.parse().unwrap() })
+    }
+
+    fn scan_into_buffer(&mut self, lit: &mut String) {
+        while let Some(ch) = self.iter.next() {
+            if ch.is_alphabetic() ||
+                ch.is_digit(10) ||
+                ch.eq(&'_') {
+                lit.push(ch)
+            } else {
+                self.unused_lookahead = Some(ch);
+                break;
             }
         }
     }
