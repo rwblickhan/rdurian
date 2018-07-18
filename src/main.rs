@@ -5,6 +5,7 @@ use clap::{App, Arg};
 use rdurian::lexer::Lexer;
 use rdurian::parser::Parser;
 use rdurian::pretty_printer::*;
+use rdurian::treewalk_interpreter::{Interpreter};
 use std::io::{stdin, stdout, Write};
 
 fn main() {
@@ -40,6 +41,7 @@ fn exec_repl(pretty_print: bool) {
     println!("Welcome to the rdurian REPL! Type 'fin' when you're finished.");
     print!("> ");
     stdout().flush().unwrap();
+    let interpreter = Interpreter::new();
     loop {
         let mut buffer = String::new();
         stdin().read_line(&mut buffer).unwrap();
@@ -57,6 +59,7 @@ fn exec_repl(pretty_print: bool) {
             if pretty_print {
                 println!("{}", pretty_print_stmt(&stmt));
             }
+            interpreter.interp(&stmt);
         }
         print!("> ");
         stdout().flush().unwrap();
