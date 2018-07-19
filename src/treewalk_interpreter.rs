@@ -1,10 +1,15 @@
 use ast::{Expr, Stmt};
+use std::collections::HashMap;
 use std::fmt;
 use std::io::{stderr, stdout, Error, Write};
+use std::ops::Deref;
 use token::Token;
 
-pub struct Interpreter;
+pub struct Interpreter {
+    curr_scope: Box<Environment>
+}
 
+#[derive(Clone)]
 enum RuntimeObject {
     String(String),
     Integer(i32),
@@ -33,26 +38,85 @@ impl From<Error> for RuntimeError {
     }
 }
 
-impl Interpreter {
-    pub fn new() -> Interpreter {
-        Interpreter
+type RuntimeIdentifier = String;
+
+struct Environment {
+    parent: Option<Box<Environment>>,
+    env: HashMap<RuntimeIdentifier, RuntimeObject>,
+}
+
+impl Environment {
+    fn new(parent: Option<Box<Environment>>) -> Environment {
+        Environment { parent, env: HashMap::new() }
     }
 
-    pub fn interp(&self, stmt: &Stmt) {
+    fn get(&self, ident: &RuntimeIdentifier) -> Result<RuntimeObject, RuntimeError> {
+        match self.env.get(ident) {
+            Some(obj) => Ok(obj.deref().clone()),
+            None => match self.parent {
+                Some(ref enclosing_scope) => enclosing_scope.get(ident),
+                None => Err(RuntimeError { error: format!("Undeclared identifier {}", ident) })
+            }
+        }
+    }
+
+    fn declare(&mut self, ident: &RuntimeIdentifier, val: &RuntimeObject) -> Result<(), RuntimeError> {
+        match self.get(ident) {
+            Ok(..) => Err(RuntimeError { error: format!("Identifier {} already declared", ident) }),
+            Err(..) => {
+                self.env.insert(ident.clone(), val.clone());
+                Ok(())
+            }
+        }
+    }
+
+    fn assign(&mut self, ident: &RuntimeIdentifier, val: &RuntimeObject) -> Result<(), RuntimeError> {
+        match self.env.get(ident) {
+            Some(..) => {
+                self.env.insert(ident.clone(), val.clone());
+                Ok(())
+            }
+            None => match self.parent {
+                Some(ref mut enclosing_scope) => enclosing_scope.assign(ident, val),
+                None => Err(RuntimeError { error: format!("Undeclared identifier {}", ident) })
+            }
+        }
+    }
+}
+
+impl Interpreter {
+    pub fn new() -> Interpreter {
+        Interpreter { curr_scope: Box::new(Environment::new(None)) }
+    }
+
+    pub fn interp(&mut self, stmt: &Stmt) {
         match self.interp_stmt(stmt) {
             Ok(msg) => println!("{}", msg),
             Err(re) => println!("Runtime error: {}", re.error)
         }
     }
 
-    fn interp_stmt(&self, stmt: &Stmt) -> Result<String, RuntimeError> {
+    fn interp_stmt(&mut self, stmt: &Stmt) -> Result<String, RuntimeError> {
         match stmt {
-            Stmt::Block {stmts} => {
+            Stmt::Block { stmts } => {
+                // TODO handle environment
                 let mut buffer = String::new();
                 for stmt in stmts {
                     buffer.push_str(&format!("{}\n", self.interp_stmt(stmt)?));
                 }
                 Ok(buffer)
+            }
+            Stmt::Let { ident, expr } => {
+                let lval = self.interp_lval(ident)?;
+                let assign_val = self.interp_expr(expr)?;
+                self.curr_scope.declare(&lval, &assign_val)?;
+                Ok(format!("{} = {}", lval, assign_val))
+            }
+            Stmt::Assign {ident, expr} => {
+                let lval = self.interp_lval(ident)?;
+                let assign_val = self.interp_expr(expr)?;
+                self.curr_scope.assign(&lval, &assign_val)?;
+                Ok(format!("{} = {}", lval, assign_val))
             }
             Stmt::Print { expr } => {
                 let expr_obj = self.interp_expr(expr)?;
@@ -61,7 +125,7 @@ impl Interpreter {
                 handle.write(format!("{}\n", expr_obj).as_bytes())?;
                 Ok("stdout done".to_string())
             }
-            Stmt::Err {expr } => {
+            Stmt::Err { expr } => {
                 let expr_obj = self.interp_expr(expr)?;
                 let stderr = stderr();
                 let mut handle = stderr.lock();
@@ -70,6 +134,16 @@ impl Interpreter {
             }
             Stmt::Expr { expr } => Ok(format!("{}", self.interp_expr(expr)?)),
             _ => Err(RuntimeError { error: "Unimplemented.".to_string() }) // TODO
+        }
+    }
+
+    fn interp_lval(&self, expr: &Expr) -> Result<RuntimeIdentifier, RuntimeError> {
+        match expr {
+            Expr::Identifier { ident } => match ident {
+                Token::Identifier {literal, ..} => Ok(literal.clone()),
+                _ => Err(RuntimeError{error: "Unexpected identifier token.".to_string()})
+            }
+            _ => Err(RuntimeError { error: "Expression was not a valid assignment target.".to_string() })
         }
     }
 
@@ -115,7 +189,10 @@ impl Interpreter {
                     _ => Err(RuntimeError { error: "Unexpected literal found.".to_string() })
                 }
             }
-            Expr::Identifier { ident } => Err(RuntimeError { error: "Unimplemented.".to_string() }), // TODO
+            Expr::Identifier { ident } => match ident {
+                Token::Identifier {literal, ..} => self.curr_scope.get(literal),
+                _ => Err(RuntimeError{error: "Unexpected token for identifier.".to_string()})
+            }
             Expr::Grouping { expr } => self.interp_expr(expr),
             Expr::FnCall { ident, args } => Err(RuntimeError { error: "Unimplemented.".to_string() }) // TODO
         }
