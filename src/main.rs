@@ -41,7 +41,7 @@ fn exec_repl(pretty_print: bool) {
     println!("Welcome to the rdurian REPL! Type 'fin' when you're finished.");
     print!("> ");
     stdout().flush().unwrap();
-    let mut interpreter = Interpreter::new();
+    let mut interpreter = Interpreter::default();
     loop {
         let mut buffer = String::new();
         stdin().read_line(&mut buffer).unwrap();
