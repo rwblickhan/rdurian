@@ -110,6 +110,26 @@ impl Interpreter {
                 self.curr_scope = new_scope.parent.unwrap().deref().clone(); // bye bye new scope
                 Ok(buffer)
             }
+            Stmt::If { cond, true_body, false_body } => {
+                let cond_obj = self.interp_expr(cond)?;
+                if self.is_truthy(&cond_obj) {
+                    self.interp_stmt(true_body)?;
+                    return Ok("if done".to_string());
+                }
+                match false_body {
+                    None => Ok("if done".to_string()),
+                    Some(body) => {
+                        self.interp_stmt(body)?;
+                        Ok("if done".to_string())
+                    }
+                }
+            }
+            Stmt::While {cond, body} => {
+                while self.is_truthy(&self.interp_expr(cond)?) {
+                    self.interp_stmt(body)?;
+                }
+                Ok("while done".to_string())
+            }
             Stmt::Let { ident, expr } => {
                 let lval = self.interp_lval(ident)?;
                 let assign_val = self.interp_expr(expr)?;
