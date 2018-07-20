@@ -28,13 +28,15 @@ impl fmt::Display for RuntimeObject {
     }
 }
 
-struct RuntimeException {
-    msg: String
+enum RuntimeException {
+    RuntimeError(String),
+    Next,
+    Break,
 }
 
 impl From<Error> for RuntimeException {
     fn from(error: Error) -> Self {
-        RuntimeException { msg: error.to_string() }
+        RuntimeException::RuntimeError(error.to_string())
     }
 }
 
@@ -56,14 +58,14 @@ impl Environment {
             Some(obj) => Ok(obj.deref().clone()),
             None => match self.parent {
                 Some(ref enclosing_scope) => enclosing_scope.get(ident),
-                None => Err(RuntimeException { msg: format!("Undeclared identifier {}", ident) })
+                None => Err(RuntimeException::RuntimeError(format!("Undeclared identifier {}", ident)))
             }
         }
     }
 
     fn declare(&mut self, ident: &RuntimeIdentifier, val: &RuntimeObject) -> Result<(), RuntimeException> {
         match self.get(ident) {
-            Ok(..) => Err(RuntimeException { msg: format!("Identifier {} already declared", ident) }),
+            Ok(..) => Err(RuntimeException::RuntimeError(format!("Identifier {} already declared", ident))),
             Err(..) => {
                 self.env.insert(ident.clone(), val.clone());
                 Ok(())
@@ -79,7 +81,7 @@ impl Environment {
             }
             None => match self.parent {
                 Some(ref mut enclosing_scope) => enclosing_scope.assign(ident, val),
-                None => Err(RuntimeException { msg: format!("Undeclared identifier {}", ident) })
+                None => Err(RuntimeException::RuntimeError(format!("Undeclared identifier {}", ident)))
             }
         }
     }
@@ -93,7 +95,11 @@ impl Interpreter {
     pub fn interp(&mut self, stmt: &Stmt) {
         match self.interp_stmt(stmt) {
             Ok(msg) => println!("{}", msg),
-            Err(re) => println!("Runtime error: {}", re.msg)
+            Err(exception) => match exception {
+                RuntimeException::RuntimeError(e) => println!("Runtime error: {}", e),
+                RuntimeException::Break => println!("Runtime error: break with no enclosing loop"),
+                RuntimeException::Next => println!("Runtime error: next with no enclosing loop")
+            }
         }
     }
 
@@ -132,26 +138,29 @@ impl Interpreter {
                     }
                 }
             }
-            Stmt::While {cond, body} => {
+            Stmt::While { cond, body } => {
                 while self.is_truthy(&self.interp_expr(cond)?) {
                     match self.interp_stmt(body) {
                         // TODO yes this is hacky and yes i'm too lazy to fix the types right now
-                        Err(ref e) if e.msg.eq("break") => return Ok("while done".to_string()),
-                        Err(ref e) if e.msg.eq("next") => continue,
+                        Err(exception) => match exception {
+                            RuntimeException::Break => return Ok("while done".to_string()),
+                            RuntimeException::Next => continue,
+                            _ => return Err(exception)
+                        }
                         _ => ()
                     };
                 }
                 Ok("while done".to_string())
             }
-            Stmt::Next => Err(RuntimeException {msg: "next".to_string()}),
-            Stmt::Break => Err(RuntimeException {msg: "break".to_string()}),
+            Stmt::Next => Err(RuntimeException::Next),
+            Stmt::Break => Err(RuntimeException::Break),
             Stmt::Let { ident, expr } => {
                 let lval = self.interp_lval(ident)?;
                 let assign_val = self.interp_expr(expr)?;
                 self.curr_scope.declare(&lval, &assign_val)?;
                 Ok(format!("{} = {}", lval, assign_val))
             }
-            Stmt::Assign {ident, expr} => {
+            Stmt::Assign { ident, expr } => {
                 let lval = self.interp_lval(ident)?;
                 let assign_val = self.interp_expr(expr)?;
                 self.curr_scope.assign(&lval, &assign_val)?;
@@ -180,17 +189,17 @@ impl Interpreter {
                 Ok("stdin done".to_string())
             }
             Stmt::Expr { expr } => Ok(format!("{}", self.interp_expr(expr)?)),
-            _ => Err(RuntimeException { msg: "Unimplemented.".to_string() }) // TODO
+            _ => Err(RuntimeException::RuntimeError("Unimplemented.".to_string())) // TODO
         }
     }
 
     fn interp_lval(&self, expr: &Expr) -> Result<RuntimeIdentifier, RuntimeException> {
         match expr {
             Expr::Identifier { ident } => match ident {
-                Token::Identifier {literal, ..} => Ok(literal.clone()),
-                _ => Err(RuntimeException { msg: "Unexpected identifier token.".to_string()})
+                Token::Identifier { literal, .. } => Ok(literal.clone()),
+                _ => Err(RuntimeException::RuntimeError("Unexpected identifier token.".to_string()))
             }
-            _ => Err(RuntimeException { msg: "Expression was not a valid assignment target.".to_string() })
+            _ => Err(RuntimeException::RuntimeError("Expression was not a valid assignment target.".to_string()))
         }
     }
 
@@ -207,13 +216,13 @@ impl Interpreter {
                     Token::Minus(_line) => Ok(self.interp_sub(&left_obj, &right_obj)?),
                     Token::Star(_line) => Ok(self.interp_mul(&left_obj, &right_obj)?),
                     Token::Slash(_line) => Ok(self.interp_fdiv(&left_obj, &right_obj)?),
-                    Token::BangEqual(_line) => Err(RuntimeException { msg: "Unimplemented.".to_string() }), // TODO
-                    Token::EqualEqual(_line) => Err(RuntimeException { msg: "Unimplemented.".to_string() }), // TODO
+                    Token::BangEqual(_line) => Err(RuntimeException::RuntimeError("Unimplemented.".to_string())), // TODO
+                    Token::EqualEqual(_line) => Err(RuntimeException::RuntimeError("Unimplemented.".to_string())), // TODO
                     Token::GreaterEqual(_line) => Ok(self.interp_ge(&left_obj, &right_obj)?),
                     Token::Greater(_line) => Ok(self.interp_gt(&left_obj, &right_obj)?),
                     Token::LesserEqual(_line) => Ok(self.interp_le(&left_obj, &right_obj)?),
                     Token::Lesser(_line) => Ok(self.interp_lt(&left_obj, &right_obj)?),
-                    _ => Err(RuntimeException { msg: "Unexpected token found for binary operator.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Unexpected token found for binary operator.".to_string()))
                 }
             }
             Expr::Unary { operator, right } => {
@@ -223,7 +232,7 @@ impl Interpreter {
                     Token::Minus(_line) => self.interp_negate(&right_obj),
                     Token::Ampersand(_line) => Ok(self.interp_stringify(&right_obj)),
                     Token::Bang(_line) => Ok(RuntimeObject::Bool(!self.is_truthy(&right_obj))),
-                    _ => Err(RuntimeException { msg: "Unexpected token found for unary operator.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Unexpected token found for unary operator.".to_string()))
                 }
             }
             Expr::Literal { value } => {
@@ -233,15 +242,15 @@ impl Interpreter {
                     Token::Float { literal, .. } => Ok(RuntimeObject::Float(literal)),
                     Token::True(_line) => Ok(RuntimeObject::Bool(true)),
                     Token::False(_line) => Ok(RuntimeObject::Bool(false)),
-                    _ => Err(RuntimeException { msg: "Unexpected literal found.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Unexpected literal found.".to_string()))
                 }
             }
             Expr::Identifier { ident } => match ident {
-                Token::Identifier {literal, ..} => self.curr_scope.get(literal),
-                _ => Err(RuntimeException { msg: "Unexpected token for identifier.".to_string()})
+                Token::Identifier { literal, .. } => self.curr_scope.get(literal),
+                _ => Err(RuntimeException::RuntimeError("Unexpected token for identifier.".to_string()))
             }
             Expr::Grouping { expr } => self.interp_expr(expr),
-            Expr::FnCall { ident, args } => Err(RuntimeException { msg: "Unimplemented.".to_string() }) // TODO
+            Expr::FnCall { ident, args } => Err(RuntimeException::RuntimeError("Unimplemented.".to_string())) // TODO
         }
     }
 
@@ -276,7 +285,7 @@ impl Interpreter {
                     RuntimeObject::Integer(right_int) => {
                         Ok(RuntimeObject::Integer(left_int + right_int))
                     }
-                    _ => Err(RuntimeException { msg: "Right operand had incompatible type.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
             }
             RuntimeObject::Float(left_float) => {
@@ -284,10 +293,10 @@ impl Interpreter {
                     RuntimeObject::Float(right_float) => {
                         Ok(RuntimeObject::Float(left_float + right_float))
                     }
-                    _ => Err(RuntimeException { msg: "Right operand had incompatible type.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
             }
-            _ => Err(RuntimeException { msg: "Left operand had incompatible type.".to_string() })
+            _ => Err(RuntimeException::RuntimeError("Left operand had incompatible type.".to_string()))
         }
     }
 
@@ -298,7 +307,7 @@ impl Interpreter {
                     RuntimeObject::Integer(right_int) => {
                         Ok(RuntimeObject::Integer(left_int - right_int))
                     }
-                    _ => Err(RuntimeException { msg: "Right operand had incompatible type.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
             }
             RuntimeObject::Float(left_float) => {
@@ -306,10 +315,10 @@ impl Interpreter {
                     RuntimeObject::Float(right_float) => {
                         Ok(RuntimeObject::Float(left_float - right_float))
                     }
-                    _ => Err(RuntimeException { msg: "Right operand had incompatible type.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
             }
-            _ => Err(RuntimeException { msg: "Left operand had incompatible type.".to_string() })
+            _ => Err(RuntimeException::RuntimeError("Left operand had incompatible type.".to_string()))
         }
     }
 
@@ -320,7 +329,7 @@ impl Interpreter {
                     RuntimeObject::Integer(right_int) => {
                         Ok(RuntimeObject::Integer(left_int * right_int))
                     }
-                    _ => Err(RuntimeException { msg: "Right operand had incompatible type.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
             }
             RuntimeObject::Float(left_float) => {
@@ -328,10 +337,10 @@ impl Interpreter {
                     RuntimeObject::Float(right_float) => {
                         Ok(RuntimeObject::Float(left_float * right_float))
                     }
-                    _ => Err(RuntimeException { msg: "Right operand had incompatible type.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
             }
-            _ => Err(RuntimeException { msg: "Left operand had incompatible type.".to_string() })
+            _ => Err(RuntimeException::RuntimeError("Left operand had incompatible type.".to_string()))
         }
     }
 
@@ -342,7 +351,7 @@ impl Interpreter {
                     RuntimeObject::Integer(right_int) => {
                         Ok(RuntimeObject::Float(left_int as f64 / right_int as f64))
                     }
-                    _ => Err(RuntimeException { msg: "Right operand had incompatible type.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
             }
             RuntimeObject::Float(left_float) => {
@@ -350,10 +359,10 @@ impl Interpreter {
                     RuntimeObject::Float(right_float) => {
                         Ok(RuntimeObject::Float(left_float / right_float))
                     }
-                    _ => Err(RuntimeException { msg: "Right operand had incompatible type.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
             }
-            _ => Err(RuntimeException { msg: "Left operand had incompatible type.".to_string() })
+            _ => Err(RuntimeException::RuntimeError("Left operand had incompatible type.".to_string()))
         }
     }
 
@@ -364,7 +373,7 @@ impl Interpreter {
                     RuntimeObject::Integer(right_int) => {
                         Ok(RuntimeObject::Bool(left_int >= right_int))
                     }
-                    _ => Err(RuntimeException { msg: "Right operand had incompatible type.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
             }
             RuntimeObject::Float(left_float) => {
@@ -372,10 +381,10 @@ impl Interpreter {
                     RuntimeObject::Float(right_float) => {
                         Ok(RuntimeObject::Bool(left_float >= right_float))
                     }
-                    _ => Err(RuntimeException { msg: "Right operand had incompatible type.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
             }
-            _ => Err(RuntimeException { msg: "Left operand had incompatible type.".to_string() })
+            _ => Err(RuntimeException::RuntimeError("Left operand had incompatible type.".to_string()))
         }
     }
 
@@ -386,7 +395,7 @@ impl Interpreter {
                     RuntimeObject::Integer(right_int) => {
                         Ok(RuntimeObject::Bool(left_int > right_int))
                     }
-                    _ => Err(RuntimeException { msg: "Right operand had incompatible type.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
             }
             RuntimeObject::Float(left_float) => {
@@ -394,10 +403,10 @@ impl Interpreter {
                     RuntimeObject::Float(right_float) => {
                         Ok(RuntimeObject::Bool(left_float > right_float))
                     }
-                    _ => Err(RuntimeException { msg: "Right operand had incompatible type.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
             }
-            _ => Err(RuntimeException { msg: "Left operand had incompatible type.".to_string() })
+            _ => Err(RuntimeException::RuntimeError("Left operand had incompatible type.".to_string()))
         }
     }
 
@@ -408,7 +417,7 @@ impl Interpreter {
                     RuntimeObject::Integer(right_int) => {
                         Ok(RuntimeObject::Bool(left_int <= right_int))
                     }
-                    _ => Err(RuntimeException { msg: "Right operand had incompatible type.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
             }
             RuntimeObject::Float(left_float) => {
@@ -416,10 +425,10 @@ impl Interpreter {
                     RuntimeObject::Float(right_float) => {
                         Ok(RuntimeObject::Bool(left_float <= right_float))
                     }
-                    _ => Err(RuntimeException { msg: "Right operand had incompatible type.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
             }
-            _ => Err(RuntimeException { msg: "Left operand had incompatible type.".to_string() })
+            _ => Err(RuntimeException::RuntimeError("Left operand had incompatible type.".to_string()))
         }
     }
 
@@ -430,7 +439,7 @@ impl Interpreter {
                     RuntimeObject::Integer(right_int) => {
                         Ok(RuntimeObject::Bool(left_int < right_int))
                     }
-                    _ => Err(RuntimeException { msg: "Right operand had incompatible type.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
             }
             RuntimeObject::Float(left_float) => {
@@ -438,10 +447,10 @@ impl Interpreter {
                     RuntimeObject::Float(right_float) => {
                         Ok(RuntimeObject::Bool(left_float < right_float))
                     }
-                    _ => Err(RuntimeException { msg: "Right operand had incompatible type.".to_string() })
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
             }
-            _ => Err(RuntimeException { msg: "Left operand had incompatible type.".to_string() })
+            _ => Err(RuntimeException::RuntimeError("Left operand had incompatible type.".to_string()))
         }
     }
 
@@ -463,11 +472,11 @@ impl Interpreter {
                     Ok(i) => Ok(RuntimeObject::Integer(i)),
                     Err(_e) => match s.parse::<f64>() {
                         Ok(f) => Ok(RuntimeObject::Float(f)),
-                        Err(_e) => Err(RuntimeException { msg: "Right operand was not convertible to numeric type.".to_string() })
+                        Err(_e) => Err(RuntimeException::RuntimeError("Right operand was not convertible to numeric type.".to_string()))
                     }
                 }
             }
-            _ => Err(RuntimeException { msg: "Right operand was not convertible to numeric type.".to_string() })
+            _ => Err(RuntimeException::RuntimeError("Right operand was not convertible to numeric type.".to_string()))
         }
     }
 
@@ -480,11 +489,11 @@ impl Interpreter {
                     Ok(i) => Ok(RuntimeObject::Integer(-i)),
                     Err(_e) => match s.parse::<f64>() {
                         Ok(f) => Ok(RuntimeObject::Float(-f)),
-                        Err(_e) => Err(RuntimeException { msg: "Right operand was not convertible to numeric type.".to_string() })
+                        Err(_e) => Err(RuntimeException::RuntimeError("Right operand was not convertible to numeric type.".to_string()))
                     }
                 }
             }
-            _ => Err(RuntimeException { msg: "Right operand was not convertible to numeric type.".to_string() })
+            _ => Err(RuntimeException::RuntimeError("Right operand was not convertible to numeric type.".to_string()))
         }
     }
 }
