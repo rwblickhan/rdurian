@@ -1,7 +1,7 @@
 use ast::{Expr, Stmt};
 use std::collections::HashMap;
 use std::fmt;
-use std::io::{stderr, stdout, Error, Write};
+use std::io::{stderr, stdin, stdout, BufRead, Error, Write};
 use std::ops::Deref;
 use token::Token;
 
@@ -170,6 +170,14 @@ impl Interpreter {
                 let mut handle = stderr.lock();
                 handle.write(format!("{}\n", expr_obj).as_bytes())?;
                 Ok("stderr done".to_string())
+            }
+            Stmt::Scan { ident } => {
+                let lval = self.interp_lval(ident)?;
+                let stdin = stdin();
+                let mut handle = stdin.lock();
+                let input = handle.lines().next().unwrap()?;
+                self.curr_scope.assign(&lval, &RuntimeObject::String(input))?;
+                Ok("stdin done".to_string())
             }
             Stmt::Expr { expr } => Ok(format!("{}", self.interp_expr(expr)?)),
             _ => Err(RuntimeException { msg: "Unimplemented.".to_string() }) // TODO
