@@ -1,6 +1,7 @@
 use ast::{Expr, Stmt};
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
+use std::f64;
 use std::io::{stderr, stdin, stdout, BufRead, Error, Write};
 use std::ops::Deref;
 use token::Token;
@@ -92,11 +93,13 @@ impl Environment {
     }
 }
 
-impl Interpreter {
-    pub fn new() -> Interpreter {
+impl Default for Interpreter {
+    fn default() -> Self {
         Interpreter { curr_scope: Environment::new(None) }
     }
+}
 
+impl Interpreter {
     pub fn interp(&mut self, stmt: &Stmt) {
         match self.interp_stmt(stmt) {
             Ok(msg) => println!("{}", msg),
@@ -146,14 +149,12 @@ impl Interpreter {
             }
             Stmt::While { cond, body } => {
                 while is_truthy(&self.interp_expr(cond)?) {
-                    match self.interp_stmt(body) {
-                        // TODO yes this is hacky and yes i'm too lazy to fix the types right now
-                        Err(exception) => match exception {
+                    if let Err(exception) = self.interp_stmt(body) {
+                        match exception {
                             RuntimeException::Break => return Ok("while done".to_string()),
                             RuntimeException::Next => continue,
                             _ => return Err(exception)
                         }
-                        _ => ()
                     };
                 }
                 Ok("while done".to_string())
@@ -176,14 +177,14 @@ impl Interpreter {
                 let expr_obj = self.interp_expr(expr)?;
                 let stdout = stdout();
                 let mut handle = stdout.lock();
-                handle.write(format!("{}\n", expr_obj).as_bytes())?;
+                handle.write_all(format!("{}\n", expr_obj).as_bytes())?;
                 Ok("stdout done".to_string())
             }
             Stmt::Err { expr } => {
                 let expr_obj = self.interp_expr(expr)?;
                 let stderr = stderr();
                 let mut handle = stderr.lock();
-                handle.write(format!("{}\n", expr_obj).as_bytes())?;
+                handle.write_all(format!("{}\n", expr_obj).as_bytes())?;
                 Ok("stderr done".to_string())
             }
             Stmt::Scan { ident } => {
@@ -287,7 +288,7 @@ impl Interpreter {
                 }
 
                 match func_obj {
-                    RuntimeObject::Function {ref params, ref closure, ref body}=> {
+                    RuntimeObject::Function { ref params, ref closure, ref body } => {
                         let old_scope = self.curr_scope.clone(); // lol so inefficient
                         self.curr_scope = closure.clone();
                         for param in params {
@@ -408,7 +409,7 @@ impl Interpreter {
             RuntimeObject::Integer(left_int) => {
                 match *right {
                     RuntimeObject::Integer(right_int) => {
-                        Ok(RuntimeObject::Float(left_int as f64 / right_int as f64))
+                        Ok(RuntimeObject::Float(f64::from(left_int) / f64::from(right_int)))
                     }
                     _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
