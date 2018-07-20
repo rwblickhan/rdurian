@@ -59,7 +59,7 @@ pub fn pretty_print_expr(expr: &Expr) -> String {
         Expr::Unary { ref operator, ref right } => format!("({} {})",
                                                            operator.clone(),
                                                            pretty_print_expr(right)),
-        Expr::Literal { ref value } => format!("(literal {}", value.clone()),
+        Expr::Literal { ref value } => format!("(literal {})", value.clone()),
         Expr::Identifier { ref ident } => format!("(ident {})", ident.clone()),
         Expr::Grouping { ref expr } => format!("({})", pretty_print_expr(expr)),
         Expr::FnCall { ref ident, ref args } => {

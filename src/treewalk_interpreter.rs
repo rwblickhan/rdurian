@@ -6,7 +6,7 @@ use std::ops::Deref;
 use token::Token;
 
 pub struct Interpreter {
-    curr_scope: Box<Environment>
+    curr_scope: Environment
 }
 
 #[derive(Clone)]
@@ -40,6 +40,7 @@ impl From<Error> for RuntimeError {
 
 type RuntimeIdentifier = String;
 
+#[derive(Clone)]
 struct Environment {
     parent: Option<Box<Environment>>,
     env: HashMap<RuntimeIdentifier, RuntimeObject>,
@@ -86,7 +87,7 @@ impl Environment {
 
 impl Interpreter {
     pub fn new() -> Interpreter {
-        Interpreter { curr_scope: Box::new(Environment::new(None)) }
+        Interpreter { curr_scope: Environment::new(None) }
     }
 
     pub fn interp(&mut self, stmt: &Stmt) {
@@ -99,11 +100,14 @@ impl Interpreter {
     fn interp_stmt(&mut self, stmt: &Stmt) -> Result<String, RuntimeError> {
         match stmt {
             Stmt::Block { stmts } => {
-                // TODO handle environment
+                let old_scope = self.curr_scope.clone(); // lol so inefficient
+                self.curr_scope = Environment::new(Some(Box::new(old_scope)));
                 let mut buffer = String::new();
                 for stmt in stmts {
                     buffer.push_str(&format!("{}\n", self.interp_stmt(stmt)?));
                 }
+                let new_scope = self.curr_scope.clone();
+                self.curr_scope = new_scope.parent.unwrap().deref().clone(); // bye bye new scope
                 Ok(buffer)
             }
             Stmt::Let { ident, expr } => {
