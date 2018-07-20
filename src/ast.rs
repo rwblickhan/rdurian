@@ -1,6 +1,6 @@
 use token::Token;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Block { stmts: Vec<Box<Stmt>> },
     If { cond: Box<Expr>, true_body: Box<Stmt>, false_body: Option<Box<Stmt>> },
@@ -17,7 +17,7 @@ pub enum Stmt {
     Expr { expr: Box<Expr> },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Binary { left: Box<Expr>, operator: Token, right: Box<Expr> },
     Unary { operator: Token, right: Box<Expr> },

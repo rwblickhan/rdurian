@@ -1,5 +1,5 @@
 use ast::{Expr, Stmt};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::io::{stderr, stdin, stdout, BufRead, Error, Write};
 use std::ops::Deref;
@@ -15,6 +15,8 @@ enum RuntimeObject {
     Integer(i32),
     Float(f64),
     Bool(bool),
+    Function { params: Vec<String>, closure: Environment, body: Box<Stmt> },
+    Nil,
 }
 
 impl fmt::Display for RuntimeObject {
@@ -23,7 +25,9 @@ impl fmt::Display for RuntimeObject {
             RuntimeObject::String(s) => write!(f, "{}", s),
             RuntimeObject::Integer(i) => write!(f, "{}", i),
             RuntimeObject::Float(fl) => write!(f, "{}", fl),
-            RuntimeObject::Bool(b) => write!(f, "{}", b)
+            RuntimeObject::Bool(b) => write!(f, "{}", b),
+            RuntimeObject::Function { .. } => write!(f, "function"), // TODO
+            RuntimeObject::Nil => write!(f, "nil")
         }
     }
 }
@@ -32,6 +36,7 @@ enum RuntimeException {
     RuntimeError(String),
     Next,
     Break,
+    Return(RuntimeObject),
 }
 
 impl From<Error> for RuntimeException {
@@ -42,7 +47,7 @@ impl From<Error> for RuntimeException {
 
 type RuntimeIdentifier = String;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct Environment {
     parent: Option<Box<Environment>>,
     env: HashMap<RuntimeIdentifier, RuntimeObject>,
@@ -98,7 +103,8 @@ impl Interpreter {
             Err(exception) => match exception {
                 RuntimeException::RuntimeError(e) => println!("Runtime error: {}", e),
                 RuntimeException::Break => println!("Runtime error: break with no enclosing loop"),
-                RuntimeException::Next => println!("Runtime error: next with no enclosing loop")
+                RuntimeException::Next => println!("Runtime error: next with no enclosing loop"),
+                RuntimeException::Return(..) => println!("Runtime error: return with no enclosing function")
             }
         }
     }
@@ -126,7 +132,7 @@ impl Interpreter {
             }
             Stmt::If { cond, true_body, false_body } => {
                 let cond_obj = self.interp_expr(cond)?;
-                if self.is_truthy(&cond_obj) {
+                if is_truthy(&cond_obj) {
                     self.interp_stmt(true_body)?;
                     return Ok("if done".to_string());
                 }
@@ -139,7 +145,7 @@ impl Interpreter {
                 }
             }
             Stmt::While { cond, body } => {
-                while self.is_truthy(&self.interp_expr(cond)?) {
+                while is_truthy(&self.interp_expr(cond)?) {
                     match self.interp_stmt(body) {
                         // TODO yes this is hacky and yes i'm too lazy to fix the types right now
                         Err(exception) => match exception {
@@ -188,8 +194,30 @@ impl Interpreter {
                 self.curr_scope.assign(&lval, &RuntimeObject::String(input))?;
                 Ok("stdin done".to_string())
             }
+            Stmt::Return { expr } => {
+                let ret_val = self.interp_expr(expr)?;
+                Err(RuntimeException::Return(ret_val))
+            }
+            Stmt::FnDecl { ident, params, body } => {
+                let ident_str = self.interp_lval(ident)?;
+                let mut param_strs = Vec::new();
+                for param in params {
+                    let param_str = self.interp_lval(param)?;
+                    param_strs.push(param_str);
+                }
+                let mut captured_scope = self.curr_scope.clone();
+                for param_str in &param_strs {
+                    captured_scope.declare(param_str, &RuntimeObject::Nil)?;
+                }
+                self.curr_scope.declare(&ident_str,
+                                        &RuntimeObject::Function {
+                                            params: param_strs,
+                                            closure: captured_scope,
+                                            body: Box::new(body.deref().clone()),
+                                        })?;
+                Ok(format!("Function {} declared", ident_str))
+            }
             Stmt::Expr { expr } => Ok(format!("{}", self.interp_expr(expr)?)),
-            _ => Err(RuntimeException::RuntimeError("Unimplemented.".to_string())) // TODO
         }
     }
 
@@ -203,15 +231,15 @@ impl Interpreter {
         }
     }
 
-    fn interp_expr(&self, expr: &Expr) -> Result<RuntimeObject, RuntimeException> {
+    fn interp_expr(&mut self, expr: &Expr) -> Result<RuntimeObject, RuntimeException> {
         match expr {
             Expr::Binary { left, operator, right } => {
                 let left_obj = self.interp_expr(left)?;
                 let right_obj = self.interp_expr(right)?;
                 match *operator {
-                    Token::And(_line) => Ok(RuntimeObject::Bool(self.is_truthy(&left_obj) && self.is_truthy(&right_obj))),
-                    Token::Or(_line) => Ok(RuntimeObject::Bool(self.is_truthy(&left_obj) || self.is_truthy(&right_obj))),
-                    Token::Ampersand(_line) => Ok(self.interp_concat(&left_obj, &right_obj)),
+                    Token::And(_line) => Ok(RuntimeObject::Bool(is_truthy(&left_obj) && is_truthy(&right_obj))),
+                    Token::Or(_line) => Ok(RuntimeObject::Bool(is_truthy(&left_obj) || is_truthy(&right_obj))),
+                    Token::Ampersand(_line) => Ok(self.interp_concat(&left_obj, &right_obj)?),
                     Token::Plus(_line) => Ok(self.interp_add(&left_obj, &right_obj)?),
                     Token::Minus(_line) => Ok(self.interp_sub(&left_obj, &right_obj)?),
                     Token::Star(_line) => Ok(self.interp_mul(&left_obj, &right_obj)?),
@@ -230,8 +258,8 @@ impl Interpreter {
                 match *operator {
                     Token::Plus(_line) => self.interp_numberify(&right_obj),
                     Token::Minus(_line) => self.interp_negate(&right_obj),
-                    Token::Ampersand(_line) => Ok(self.interp_stringify(&right_obj)),
-                    Token::Bang(_line) => Ok(RuntimeObject::Bool(!self.is_truthy(&right_obj))),
+                    Token::Ampersand(_line) => Ok(self.interp_stringify(&right_obj)?),
+                    Token::Bang(_line) => Ok(RuntimeObject::Bool(!is_truthy(&right_obj))),
                     _ => Err(RuntimeException::RuntimeError("Unexpected token found for unary operator.".to_string()))
                 }
             }
@@ -250,32 +278,63 @@ impl Interpreter {
                 _ => Err(RuntimeException::RuntimeError("Unexpected token for identifier.".to_string()))
             }
             Expr::Grouping { expr } => self.interp_expr(expr),
-            Expr::FnCall { ident, args } => Err(RuntimeException::RuntimeError("Unimplemented.".to_string())) // TODO
+            Expr::FnCall { ident, args } => {
+                let ident_str = self.interp_lval(ident)?;
+                let mut func_obj = self.curr_scope.get(&ident_str)?;
+                let mut arg_queue = VecDeque::new();
+                for arg in args {
+                    arg_queue.push_front(self.interp_expr(arg)?);
+                }
+
+                match func_obj {
+                    RuntimeObject::Function {ref params, ref closure, ref body}=> {
+                        let old_scope = self.curr_scope.clone(); // lol so inefficient
+                        self.curr_scope = closure.clone();
+                        for param in params {
+                            match arg_queue.pop_front() {
+                                Some(arg) => self.curr_scope.assign(&param, &arg)?,
+                                None => return Err(RuntimeException::RuntimeError("Incorrect number of parameters".to_string()))
+                            };
+                        }
+                        match self.interp_stmt(&body) {
+                            Err(RuntimeException::Return(obj)) => {
+                                self.curr_scope = old_scope;
+                                Ok(obj)
+                            }
+                            Err(e) => {
+                                self.curr_scope = old_scope;
+                                Err(e)
+                            }
+                            _ => {
+                                self.curr_scope = old_scope;
+                                // implicitly return nil
+                                Ok(RuntimeObject::Nil)
+                            }
+                        }
+                    }
+                    _ => Err(RuntimeException::RuntimeError("Not a callable value.".to_string()))
+                }
+            }
         }
     }
 
-    fn is_truthy(&self, obj: &RuntimeObject) -> bool {
-        match *obj {
-            RuntimeObject::Bool(bool) if !bool => false,
-            _ => true
-        }
-    }
-
-    fn interp_concat(&self, left: &RuntimeObject, right: &RuntimeObject) -> RuntimeObject {
+    fn interp_concat(&self, left: &RuntimeObject, right: &RuntimeObject) -> Result<RuntimeObject, RuntimeException> {
         let mut left_str = match *left {
             RuntimeObject::String(ref s) => s.clone(),
             RuntimeObject::Integer(i) => i.to_string(),
             RuntimeObject::Float(f) => f.to_string(),
-            RuntimeObject::Bool(b) => b.to_string()
+            RuntimeObject::Bool(b) => b.to_string(),
+            _ => return Err(RuntimeException::RuntimeError(format!("Cannot stringify {}", left)))
         };
         let right_str = match *right {
             RuntimeObject::String(ref s) => s.clone(),
             RuntimeObject::Integer(i) => i.to_string(),
             RuntimeObject::Float(f) => f.to_string(),
-            RuntimeObject::Bool(b) => b.to_string()
+            RuntimeObject::Bool(b) => b.to_string(),
+            _ => return Err(RuntimeException::RuntimeError(format!("Cannot stringify {}", right)))
         };
         left_str.push_str(&right_str);
-        RuntimeObject::String(left_str)
+        Ok(RuntimeObject::String(left_str))
     }
 
     fn interp_add(&self, left: &RuntimeObject, right: &RuntimeObject) -> Result<RuntimeObject, RuntimeException> {
@@ -454,12 +513,13 @@ impl Interpreter {
         }
     }
 
-    fn interp_stringify(&self, right: &RuntimeObject) -> RuntimeObject {
+    fn interp_stringify(&self, right: &RuntimeObject) -> Result<RuntimeObject, RuntimeException> {
         match *right {
-            RuntimeObject::String(ref s) => RuntimeObject::String(s.clone()),
-            RuntimeObject::Integer(i) => RuntimeObject::String(i.to_string()),
-            RuntimeObject::Float(f) => RuntimeObject::String(f.to_string()),
-            RuntimeObject::Bool(b) => RuntimeObject::String(b.to_string())
+            RuntimeObject::String(ref s) => Ok(RuntimeObject::String(s.clone())),
+            RuntimeObject::Integer(i) => Ok(RuntimeObject::String(i.to_string())),
+            RuntimeObject::Float(f) => Ok(RuntimeObject::String(f.to_string())),
+            RuntimeObject::Bool(b) => Ok(RuntimeObject::String(b.to_string())),
+            _ => Err(RuntimeException::RuntimeError(format!("Cannot stringify {}", right)))
         }
     }
 
@@ -495,5 +555,12 @@ impl Interpreter {
             }
             _ => Err(RuntimeException::RuntimeError("Right operand was not convertible to numeric type.".to_string()))
         }
+    }
+}
+
+fn is_truthy(obj: &RuntimeObject) -> bool {
+    match *obj {
+        RuntimeObject::Bool(bool) if !bool => false,
+        _ => true
     }
 }
