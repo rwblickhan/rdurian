@@ -1,13 +1,15 @@
 use ast::{Expr, Stmt};
+use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::f64;
 use std::io::{stderr, stdin, stdout, BufRead, Error, Write};
 use std::ops::Deref;
+use std::rc::Rc;
 use token::Token;
 
 pub struct Interpreter {
-    curr_scope: Environment
+    curr_scope: Rc<RefCell<Environment>>
 }
 
 #[derive(Clone, PartialEq)]
@@ -16,7 +18,7 @@ enum RuntimeObject {
     Integer(i32),
     Float(f64),
     Bool(bool),
-    Function { params: Vec<String>, closure: Environment, body: Box<Stmt> },
+    Function { params: Vec<String>, closure: Rc<RefCell<Environment>>, body: Box<Stmt> },
     Nil,
 }
 
@@ -50,12 +52,12 @@ type RuntimeIdentifier = String;
 
 #[derive(Clone, PartialEq)]
 struct Environment {
-    parent: Option<Box<Environment>>,
+    parent: Option<Rc<RefCell<Environment>>>,
     env: HashMap<RuntimeIdentifier, RuntimeObject>,
 }
 
 impl Environment {
-    fn new(parent: Option<Box<Environment>>) -> Environment {
+    fn new(parent: Option<Rc<RefCell<Environment>>>) -> Environment {
         Environment { parent, env: HashMap::new() }
     }
 
@@ -63,7 +65,7 @@ impl Environment {
         match self.env.get(ident) {
             Some(obj) => Ok(obj.deref().clone()),
             None => match self.parent {
-                Some(ref enclosing_scope) => enclosing_scope.get(ident),
+                Some(ref enclosing_scope) => enclosing_scope.borrow().get(ident),
                 None => Err(RuntimeException::RuntimeError(format!("Undeclared identifier {}", ident)))
             }
         }
@@ -86,7 +88,7 @@ impl Environment {
                 Ok(())
             }
             None => match self.parent {
-                Some(ref mut enclosing_scope) => enclosing_scope.assign(ident, val),
+                Some(ref mut enclosing_scope) => enclosing_scope.borrow_mut().assign(ident, val),
                 None => Err(RuntimeException::RuntimeError(format!("Undeclared identifier {}", ident)))
             }
         }
@@ -95,7 +97,7 @@ impl Environment {
 
 impl Default for Interpreter {
     fn default() -> Self {
-        Interpreter { curr_scope: Environment::new(None) }
+        Interpreter { curr_scope: Rc::new(RefCell::new(Environment::new(None))) }
     }
 }
 
@@ -115,22 +117,20 @@ impl Interpreter {
     fn interp_stmt(&mut self, stmt: &Stmt) -> Result<String, RuntimeException> {
         match stmt {
             Stmt::Block { stmts } => {
-                let old_scope = self.curr_scope.clone(); // lol so inefficient
-                self.curr_scope = Environment::new(Some(Box::new(old_scope)));
+                let old_scope = self.curr_scope.clone();
+                self.curr_scope = Rc::new(RefCell::new(Environment::new(Some(old_scope.clone()))));
                 let mut buffer = String::new();
                 for stmt in stmts {
                     let output_msg = match self.interp_stmt(stmt) {
                         Err(e) => {
-                            let new_scope = self.curr_scope.clone();
-                            self.curr_scope = new_scope.parent.unwrap().deref().clone(); // bye bye new scope
+                            self.curr_scope = old_scope;
                             return Err(e);
                         }
                         Ok(obj) => obj
                     };
                     buffer.push_str(&format!("{}\n", output_msg));
                 }
-                let new_scope = self.curr_scope.clone();
-                self.curr_scope = new_scope.parent.unwrap().deref().clone(); // bye bye new scope
+                self.curr_scope = old_scope;
                 Ok(buffer)
             }
             Stmt::If { cond, true_body, false_body } => {
@@ -164,13 +164,13 @@ impl Interpreter {
             Stmt::Let { ident, expr } => {
                 let lval = self.interp_lval(ident)?;
                 let assign_val = self.interp_expr(expr)?;
-                self.curr_scope.declare(&lval, &assign_val)?;
+                self.curr_scope.borrow_mut().declare(&lval, &assign_val)?;
                 Ok(format!("{} = {}", lval, assign_val))
             }
             Stmt::Assign { ident, expr } => {
                 let lval = self.interp_lval(ident)?;
                 let assign_val = self.interp_expr(expr)?;
-                self.curr_scope.assign(&lval, &assign_val)?;
+                self.curr_scope.borrow_mut().assign(&lval, &assign_val)?;
                 Ok(format!("{} = {}", lval, assign_val))
             }
             Stmt::Print { expr } => {
@@ -192,7 +192,7 @@ impl Interpreter {
                 let stdin = stdin();
                 let mut handle = stdin.lock();
                 let input = handle.lines().next().unwrap()?;
-                self.curr_scope.assign(&lval, &RuntimeObject::String(input))?;
+                self.curr_scope.borrow_mut().assign(&lval, &RuntimeObject::String(input))?;
                 Ok("stdin done".to_string())
             }
             Stmt::Return { expr } => {
@@ -208,14 +208,14 @@ impl Interpreter {
                 }
                 let mut captured_scope = self.curr_scope.clone();
                 for param_str in &param_strs {
-                    captured_scope.declare(param_str, &RuntimeObject::Nil)?;
+                    captured_scope.borrow_mut().declare(param_str, &RuntimeObject::Nil)?;
                 }
-                self.curr_scope.declare(&ident_str,
-                                        &RuntimeObject::Function {
-                                            params: param_strs,
-                                            closure: captured_scope,
-                                            body: Box::new(body.deref().clone()),
-                                        })?;
+                self.curr_scope.borrow_mut().declare(&ident_str,
+                                                     &RuntimeObject::Function {
+                                                         params: param_strs,
+                                                         closure: captured_scope,
+                                                         body: Box::new(body.deref().clone()),
+                                                     })?;
                 Ok(format!("Function {} declared", ident_str))
             }
             Stmt::Expr { expr } => Ok(format!("{}", self.interp_expr(expr)?)),
@@ -275,13 +275,13 @@ impl Interpreter {
                 }
             }
             Expr::Identifier { ident } => match ident {
-                Token::Identifier { literal, .. } => self.curr_scope.get(literal),
+                Token::Identifier { literal, .. } => self.curr_scope.borrow().get(literal),
                 _ => Err(RuntimeException::RuntimeError("Unexpected token for identifier.".to_string()))
             }
             Expr::Grouping { expr } => self.interp_expr(expr),
             Expr::FnCall { ident, args } => {
                 let ident_str = self.interp_lval(ident)?;
-                let mut func_obj = self.curr_scope.get(&ident_str)?;
+                let mut func_obj = self.curr_scope.borrow().get(&ident_str)?;
                 let mut arg_queue = VecDeque::new();
                 for arg in args {
                     arg_queue.push_front(self.interp_expr(arg)?);
@@ -293,7 +293,7 @@ impl Interpreter {
                         self.curr_scope = closure.clone();
                         for param in params {
                             match arg_queue.pop_front() {
-                                Some(arg) => self.curr_scope.assign(&param, &arg)?,
+                                Some(arg) => self.curr_scope.borrow_mut().assign(&param, &arg)?,
                                 None => return Err(RuntimeException::RuntimeError("Incorrect number of parameters".to_string()))
                             };
                         }
