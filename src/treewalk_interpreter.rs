@@ -206,14 +206,14 @@ impl Interpreter {
                     let param_str = self.interp_lval(param)?;
                     param_strs.push(param_str);
                 }
-                let mut captured_scope = self.curr_scope.clone();
+                let mut param_scope = Environment::new(Some(self.curr_scope.clone()));
                 for param_str in &param_strs {
-                    captured_scope.borrow_mut().declare(param_str, &RuntimeObject::Nil)?;
+                    param_scope.declare(param_str, &RuntimeObject::Nil)?;
                 }
                 self.curr_scope.borrow_mut().declare(&ident_str,
                                                      &RuntimeObject::Function {
                                                          params: param_strs,
-                                                         closure: captured_scope,
+                                                         closure: Rc::new(RefCell::new(param_scope)),
                                                          body: Box::new(body.deref().clone()),
                                                      })?;
                 Ok(format!("Function {} declared", ident_str))
