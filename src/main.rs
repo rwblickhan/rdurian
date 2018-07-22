@@ -7,6 +7,7 @@ use rdurian::parser::Parser;
 use rdurian::pretty_printer::*;
 use rdurian::treewalk_interpreter::{Interpreter};
 use std::io::{stdin, stdout, Write};
+use std::fs;
 
 fn main() {
     let matches = App::new("rdurian")
@@ -14,7 +15,7 @@ fn main() {
         .author("R.W. Blickhan <rwblickhan@gmail.com>")
         .about("Rust implementation of Durian compiler")
         .arg(Arg::with_name("pp")
-            .help("Pretty print Durian source after parsing")
+            .help("Pretty print Durian source while parsing")
             .short("p")
             .long("prettyprint"))
         .arg(Arg::with_name("input")
@@ -32,7 +33,7 @@ fn main() {
 
     match matches.value_of("input") {
         None => exec_repl(pretty_print),
-        Some(input) => exec_input(pretty_print, input.to_string())
+        Some(input) => exec_input(pretty_print, input)
     }
 }
 
@@ -70,8 +71,27 @@ fn exec_repl(pretty_print: bool) {
     std::process::exit(0);
 }
 
-fn exec_input(pretty_print: bool, input: String) {
+fn exec_input(pretty_print: bool, input: &str) {
     println!("Executing input from file {}", input);
-    println!("Not yet implemented!");
-    std::process::exit(1);
+    let source = fs::read_to_string(input)
+        .unwrap_or_else(|_| panic!("Unable to read input file {}", input));
+    let mut parser = Parser::new(Lexer::new(&source));
+    let mut interpreter = Interpreter::default();
+    let mut exit_code = 0;
+    while let Some(stmt) = parser.next() {
+        if parser.had_error() {
+            exit_code = 1;
+            continue;
+        }
+        if pretty_print {
+            println!("{}", pretty_print_stmt(&stmt));
+        }
+        let out = interpreter.interp(&stmt);
+        if interpreter.had_error() {
+            exit_code = 1;
+            println!("{}", out.unwrap_or("Unknown runtime error".to_string()));
+            break;
+        }
+    }
+    std::process::exit(exit_code);
 }

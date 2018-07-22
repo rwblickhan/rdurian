@@ -1,0 +1,4 @@
+let name = ""
+print "Enter your name:"
+scan name
+print "Hello " & name
