@@ -9,7 +9,8 @@ use std::rc::Rc;
 use token::Token;
 
 pub struct Interpreter {
-    curr_scope: Rc<RefCell<Environment>>
+    curr_scope: Rc<RefCell<Environment>>,
+    had_error: bool,
 }
 
 #[derive(Clone, PartialEq)]
@@ -101,19 +102,38 @@ impl Environment {
 
 impl Default for Interpreter {
     fn default() -> Self {
-        Interpreter { curr_scope: Rc::new(RefCell::new(Environment::new(None))) }
+        Interpreter {
+            curr_scope: Rc::new(RefCell::new(Environment::new(None))),
+            had_error: false,
+        }
     }
 }
 
 impl Interpreter {
+    pub fn had_error(&self) -> bool {
+        self.had_error
+    }
+
     pub fn interp(&mut self, stmt: &Stmt) -> Option<String> {
         match self.interp_stmt(stmt) {
             Ok(msg) => msg,
             Err(exception) => match exception {
-                RuntimeException::RuntimeError(e) => Some(format!("Runtime error: {}", e)),
-                RuntimeException::Break => Some("Runtime error: break with no enclosing loop".to_string()),
-                RuntimeException::Next => Some("Runtime error: next with no enclosing loop".to_string()),
-                RuntimeException::Return(..) => Some("Runtime error: return with no enclosing function".to_string())
+                RuntimeException::RuntimeError(e) => {
+                    self.had_error = true;
+                    Some(format!("Runtime error: {}", e))
+                }
+                RuntimeException::Break => {
+                    self.had_error = true;
+                    Some("Runtime error: break with no enclosing loop".to_string())
+                }
+                RuntimeException::Next => {
+                    self.had_error = true;
+                    Some("Runtime error: next with no enclosing loop".to_string())
+                }
+                RuntimeException::Return(..) => {
+                    self.had_error = true;
+                    Some("Runtime error: return with no enclosing function".to_string())
+                }
             }
         }
     }
