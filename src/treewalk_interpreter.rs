@@ -65,8 +65,8 @@ impl Environment {
         Environment { parent, env: HashMap::new() }
     }
 
-    fn get(&self, ident: &RuntimeIdentifier) -> Result<RuntimeObject, RuntimeException> {
-        match self.env.get(ident) {
+    fn get(&self, ident: RuntimeIdentifier) -> Result<RuntimeObject, RuntimeException> {
+        match self.env.get(&ident) {
             Some(obj) => Ok(obj.deref().clone()),
             None => match self.parent {
                 Some(ref enclosing_scope) => enclosing_scope.borrow().get(ident),
@@ -75,18 +75,18 @@ impl Environment {
         }
     }
 
-    fn declare(&mut self, ident: &RuntimeIdentifier, val: &RuntimeObject) -> Result<(), RuntimeException> {
-        match self.get(ident) {
+    fn declare(&mut self, ident: RuntimeIdentifier, val: &RuntimeObject) -> Result<(), RuntimeException> {
+        match self.get(ident.clone()) {
             Ok(..) => Err(RuntimeException::RuntimeError(format!("Identifier {} already declared", ident))),
             Err(..) => {
-                self.env.insert(ident.clone(), val.clone());
+                self.env.insert(ident, val.clone());
                 Ok(())
             }
         }
     }
 
-    fn assign(&mut self, ident: &RuntimeIdentifier, val: &RuntimeObject) -> Result<(), RuntimeException> {
-        match self.env.get(ident) {
+    fn assign(&mut self, ident: RuntimeIdentifier, val: &RuntimeObject) -> Result<(), RuntimeException> {
+        match self.env.get(&ident) {
             Some(..) => {
                 self.env.insert(ident.clone(), val.clone());
                 Ok(())
@@ -148,7 +148,7 @@ impl Interpreter {
                 match false_body {
                     None => Ok(None),
                     Some(body) => {
-                        return Ok(self.interp_stmt(body)?);
+                        Ok(self.interp_stmt(body)?)
                     }
                 }
             }
@@ -161,10 +161,8 @@ impl Interpreter {
                             RuntimeException::Next => continue,
                             _ => return Err(exception)
                         }
-                        Ok(opt_msg) => match opt_msg {
-                            Some(msg) => buffer.push_str(&msg),
-                            None => ()
-
+                        Ok(opt_msg) => if let Some(msg) = opt_msg {
+                            buffer.push_str(&msg);
                         }
                     };
                 }
@@ -176,14 +174,14 @@ impl Interpreter {
                 let lval = self.interp_lval(ident)?;
                 let assign_val = self.interp_expr(expr)?;
                 let mut new_scope = Environment::new(Some(self.curr_scope.clone()));
-                new_scope.declare(&lval, &assign_val)?;
+                new_scope.declare(lval.clone(), &assign_val)?;
                 self.curr_scope = Rc::new(RefCell::new(new_scope));
                 Ok(Some(format!("{} = {}", lval, assign_val)))
             }
             Stmt::Assign { ident, expr } => {
                 let lval = self.interp_lval(ident)?;
                 let assign_val = self.interp_expr(expr)?;
-                self.curr_scope.borrow_mut().assign(&lval, &assign_val)?;
+                self.curr_scope.borrow_mut().assign(lval.clone(), &assign_val)?;
                 Ok(Some(format!("{} = {}", lval, assign_val)))
             }
             Stmt::Print { expr } => {
@@ -205,7 +203,7 @@ impl Interpreter {
                 let stdin = stdin();
                 let mut handle = stdin.lock();
                 let input = handle.lines().next().unwrap()?;
-                self.curr_scope.borrow_mut().assign(&lval, &RuntimeObject::String(input))?;
+                self.curr_scope.borrow_mut().assign(lval, &RuntimeObject::String(input))?;
                 Ok(None)
             }
             Stmt::Return { expr } => {
@@ -221,9 +219,9 @@ impl Interpreter {
                 }
                 let mut param_scope = Environment::new(Some(self.curr_scope.clone()));
                 for param_str in &param_strs {
-                    param_scope.declare(param_str, &RuntimeObject::Nil)?;
+                    param_scope.declare(param_str.clone(), &RuntimeObject::Nil)?;
                 }
-                self.curr_scope.borrow_mut().declare(&ident_str,
+                self.curr_scope.borrow_mut().declare(ident_str,
                                                      &RuntimeObject::Function {
                                                          params: param_strs,
                                                          closure: Rc::new(RefCell::new(param_scope)),
@@ -288,13 +286,13 @@ impl Interpreter {
                 }
             }
             Expr::Identifier { ident } => match ident {
-                Token::Identifier { literal, .. } => self.curr_scope.borrow().get(literal),
+                Token::Identifier { literal, .. } => self.curr_scope.borrow().get(literal.to_string()),
                 _ => Err(RuntimeException::RuntimeError("Unexpected token for identifier.".to_string()))
             }
             Expr::Grouping { expr } => self.interp_expr(expr),
             Expr::FnCall { ident, args } => {
                 let ident_str = self.interp_lval(ident)?;
-                let mut func_obj = self.curr_scope.borrow().get(&ident_str)?;
+                let mut func_obj = self.curr_scope.borrow().get(ident_str)?;
                 let mut arg_queue = VecDeque::new();
                 for arg in args {
                     arg_queue.push_front(self.interp_expr(arg)?);
@@ -306,7 +304,7 @@ impl Interpreter {
                         self.curr_scope = closure.clone();
                         for param in params {
                             match arg_queue.pop_front() {
-                                Some(arg) => self.curr_scope.borrow_mut().assign(&param, &arg)?,
+                                Some(arg) => self.curr_scope.borrow_mut().assign(param.to_string(), &arg)?,
                                 None => return Err(RuntimeException::RuntimeError("Incorrect number of parameters".to_string()))
                             };
                         }
