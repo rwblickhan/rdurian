@@ -102,19 +102,19 @@ impl Default for Interpreter {
 }
 
 impl Interpreter {
-    pub fn interp(&mut self, stmt: &Stmt) {
+    pub fn interp(&mut self, stmt: &Stmt) -> Option<String> {
         match self.interp_stmt(stmt) {
-            Ok(msg) => println!("{}", msg),
+            Ok(msg) => msg,
             Err(exception) => match exception {
-                RuntimeException::RuntimeError(e) => println!("Runtime error: {}", e),
-                RuntimeException::Break => println!("Runtime error: break with no enclosing loop"),
-                RuntimeException::Next => println!("Runtime error: next with no enclosing loop"),
-                RuntimeException::Return(..) => println!("Runtime error: return with no enclosing function")
+                RuntimeException::RuntimeError(e) => Some(format!("Runtime error: {}", e)),
+                RuntimeException::Break => Some("Runtime error: break with no enclosing loop".to_string()),
+                RuntimeException::Next => Some("Runtime error: next with no enclosing loop".to_string()),
+                RuntimeException::Return(..) => Some("Runtime error: return with no enclosing function".to_string())
             }
         }
     }
 
-    fn interp_stmt(&mut self, stmt: &Stmt) -> Result<String, RuntimeException> {
+    fn interp_stmt(&mut self, stmt: &Stmt) -> Result<Option<String>, RuntimeException> {
         match stmt {
             Stmt::Block { stmts } => {
                 let old_scope = self.curr_scope.clone();
@@ -128,22 +128,25 @@ impl Interpreter {
                         }
                         Ok(obj) => obj
                     };
-                    buffer.push_str(&format!("{}\n", output_msg));
+                    match output_msg {
+                        None => (),
+                        Some(msg) => buffer.push_str(&format!("{}\n", msg))
+                    };
                 }
                 self.curr_scope = old_scope;
-                Ok(buffer)
+                Ok(Some(buffer))
             }
             Stmt::If { cond, true_body, false_body } => {
                 let cond_obj = self.interp_expr(cond)?;
                 if is_truthy(&cond_obj) {
                     self.interp_stmt(true_body)?;
-                    return Ok("if done".to_string());
+                    return Ok(None);
                 }
                 match false_body {
-                    None => Ok("if done".to_string()),
+                    None => Ok(None),
                     Some(body) => {
                         self.interp_stmt(body)?;
-                        Ok("if done".to_string())
+                        Ok(None)
                     }
                 }
             }
@@ -151,13 +154,13 @@ impl Interpreter {
                 while is_truthy(&self.interp_expr(cond)?) {
                     if let Err(exception) = self.interp_stmt(body) {
                         match exception {
-                            RuntimeException::Break => return Ok("while done".to_string()),
+                            RuntimeException::Break => return Ok(None),
                             RuntimeException::Next => continue,
                             _ => return Err(exception)
                         }
                     };
                 }
-                Ok("while done".to_string())
+                Ok(None)
             }
             Stmt::Next => Err(RuntimeException::Next),
             Stmt::Break => Err(RuntimeException::Break),
@@ -167,27 +170,27 @@ impl Interpreter {
                 let mut new_scope = Environment::new(Some(self.curr_scope.clone()));
                 new_scope.declare(&lval, &assign_val)?;
                 self.curr_scope = Rc::new(RefCell::new(new_scope));
-                Ok(format!("{} = {}", lval, assign_val))
+                Ok(Some(format!("{} = {}", lval, assign_val)))
             }
             Stmt::Assign { ident, expr } => {
                 let lval = self.interp_lval(ident)?;
                 let assign_val = self.interp_expr(expr)?;
                 self.curr_scope.borrow_mut().assign(&lval, &assign_val)?;
-                Ok(format!("{} = {}", lval, assign_val))
+                Ok(Some(format!("{} = {}", lval, assign_val)))
             }
             Stmt::Print { expr } => {
                 let expr_obj = self.interp_expr(expr)?;
                 let stdout = stdout();
                 let mut handle = stdout.lock();
                 handle.write_all(format!("{}\n", expr_obj).as_bytes())?;
-                Ok("stdout done".to_string())
+                Ok(None)
             }
             Stmt::Err { expr } => {
                 let expr_obj = self.interp_expr(expr)?;
                 let stderr = stderr();
                 let mut handle = stderr.lock();
                 handle.write_all(format!("{}\n", expr_obj).as_bytes())?;
-                Ok("stderr done".to_string())
+                Ok(None)
             }
             Stmt::Scan { ident } => {
                 let lval = self.interp_lval(ident)?;
@@ -195,7 +198,7 @@ impl Interpreter {
                 let mut handle = stdin.lock();
                 let input = handle.lines().next().unwrap()?;
                 self.curr_scope.borrow_mut().assign(&lval, &RuntimeObject::String(input))?;
-                Ok("stdin done".to_string())
+                Ok(None)
             }
             Stmt::Return { expr } => {
                 let ret_val = self.interp_expr(expr)?;
@@ -218,9 +221,9 @@ impl Interpreter {
                                                          closure: Rc::new(RefCell::new(param_scope)),
                                                          body: Box::new(body.deref().clone()),
                                                      })?;
-                Ok(format!("Function {} declared", ident_str))
+                Ok(None)
             }
-            Stmt::Expr { expr } => Ok(format!("{}", self.interp_expr(expr)?)),
+            Stmt::Expr { expr } => Ok(Some(format!("{}", self.interp_expr(expr)?))),
         }
     }
 

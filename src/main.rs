@@ -59,7 +59,10 @@ fn exec_repl(pretty_print: bool) {
             if pretty_print {
                 println!("{}", pretty_print_stmt(&stmt));
             }
-            interpreter.interp(&stmt);
+            match interpreter.interp(&stmt) {
+                None => (),
+                Some(msg) => println!("{}", msg)
+            };
         }
         print!("> ");
         stdout().flush().unwrap();
