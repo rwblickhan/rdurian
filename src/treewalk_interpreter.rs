@@ -164,7 +164,9 @@ impl Interpreter {
             Stmt::Let { ident, expr } => {
                 let lval = self.interp_lval(ident)?;
                 let assign_val = self.interp_expr(expr)?;
-                self.curr_scope.borrow_mut().declare(&lval, &assign_val)?;
+                let mut new_scope = Environment::new(Some(self.curr_scope.clone()));
+                new_scope.declare(&lval, &assign_val)?;
+                self.curr_scope = Rc::new(RefCell::new(new_scope));
                 Ok(format!("{} = {}", lval, assign_val))
             }
             Stmt::Assign { ident, expr } => {
@@ -289,7 +291,7 @@ impl Interpreter {
 
                 match func_obj {
                     RuntimeObject::Function { ref params, ref closure, ref body } => {
-                        let old_scope = self.curr_scope.clone(); // lol so inefficient
+                        let old_scope = self.curr_scope.clone();
                         self.curr_scope = closure.clone();
                         for param in params {
                             match arg_queue.pop_front() {
