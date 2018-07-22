@@ -564,6 +564,7 @@ impl Interpreter {
 fn is_truthy(obj: &RuntimeObject) -> bool {
     match *obj {
         RuntimeObject::Bool(bool) if !bool => false,
+        RuntimeObject::Nil => false,
         _ => true
     }
 }
