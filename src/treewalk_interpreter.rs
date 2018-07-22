@@ -250,8 +250,8 @@ impl Interpreter {
                     Token::Minus(_line) => Ok(self.interp_sub(&left_obj, &right_obj)?),
                     Token::Star(_line) => Ok(self.interp_mul(&left_obj, &right_obj)?),
                     Token::Slash(_line) => Ok(self.interp_fdiv(&left_obj, &right_obj)?),
-                    Token::BangEqual(_line) => Err(RuntimeException::RuntimeError("Unimplemented.".to_string())), // TODO
-                    Token::EqualEqual(_line) => Err(RuntimeException::RuntimeError("Unimplemented.".to_string())), // TODO
+                    Token::BangEqual(_line) => Ok(RuntimeObject::Bool(!left_obj.eq(&right_obj))),
+                    Token::EqualEqual(_line) => Ok(RuntimeObject::Bool(left_obj.eq(&right_obj))),
                     Token::GreaterEqual(_line) => Ok(self.interp_ge(&left_obj, &right_obj)?),
                     Token::Greater(_line) => Ok(self.interp_gt(&left_obj, &right_obj)?),
                     Token::LesserEqual(_line) => Ok(self.interp_le(&left_obj, &right_obj)?),
