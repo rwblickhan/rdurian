@@ -28,7 +28,11 @@ impl fmt::Display for RuntimeObject {
             RuntimeObject::String(s) => write!(f, "{}", s),
             RuntimeObject::Integer(i) => write!(f, "{}", i),
             RuntimeObject::Float(fl) => write!(f, "{}", fl),
-            RuntimeObject::Bool(b) => write!(f, "{}", b),
+            RuntimeObject::Bool(b) => if *b {
+                write!(f, "True")
+            } else {
+                write!(f, "False")
+            },
             RuntimeObject::Function { .. } => write!(f, "function"), // TODO
             RuntimeObject::Nil => write!(f, "nil")
         }
@@ -139,28 +143,32 @@ impl Interpreter {
             Stmt::If { cond, true_body, false_body } => {
                 let cond_obj = self.interp_expr(cond)?;
                 if is_truthy(&cond_obj) {
-                    self.interp_stmt(true_body)?;
-                    return Ok(None);
+                    return Ok(self.interp_stmt(true_body)?);
                 }
                 match false_body {
                     None => Ok(None),
                     Some(body) => {
-                        self.interp_stmt(body)?;
-                        Ok(None)
+                        return Ok(self.interp_stmt(body)?);
                     }
                 }
             }
             Stmt::While { cond, body } => {
+                let mut buffer = String::new();
                 while is_truthy(&self.interp_expr(cond)?) {
-                    if let Err(exception) = self.interp_stmt(body) {
-                        match exception {
-                            RuntimeException::Break => return Ok(None),
+                    match self.interp_stmt(body) {
+                        Err(exception) => match exception {
+                            RuntimeException::Break => return Ok(Some(buffer)),
                             RuntimeException::Next => continue,
                             _ => return Err(exception)
                         }
+                        Ok(opt_msg) => match opt_msg {
+                            Some(msg) => buffer.push_str(&msg),
+                            None => ()
+
+                        }
                     };
                 }
-                Ok(None)
+                Ok(Some(buffer))
             }
             Stmt::Next => Err(RuntimeException::Next),
             Stmt::Break => Err(RuntimeException::Break),
@@ -569,5 +577,179 @@ fn is_truthy(obj: &RuntimeObject) -> bool {
         RuntimeObject::Bool(bool) if !bool => false,
         RuntimeObject::Nil => false,
         _ => true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use parser::Parser;
+    use lexer::Lexer;
+
+    #[test]
+    fn test_interp_if_stmt() {
+        let mut parser = Parser::new(Lexer::new("if 2 > 1 {\n    \"Good\"\n} else {\n    \"Bad\"\n}\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "Good\n");
+    }
+
+    #[test]
+    fn test_interp_else_stmt() {
+        let mut parser = Parser::new(Lexer::new("if 1 > 2 {\n    \"Good\"\n} else {\n    \"Bad\"\n}\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "Bad\n");
+    }
+
+    #[test]
+    fn test_interp_elif_stmt() {
+        let mut parser = Parser::new(Lexer::new("if 1 > 2 {\n    \"Good\"\n} elif 1 == 1 {\n    \"Okay\"\n}\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "Okay\n");
+    }
+
+    #[test]
+    fn test_interp_while_stmt() {
+        let mut parser = Parser::new(Lexer::new("let a = 0\nwhile a < 3 {\na = a + 1\n}\n"));
+        let mut interpreter = Interpreter::default();
+        let out = interpreter.interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "a = 0");
+        let out = interpreter.interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "a = 1\na = 2\na = 3\n");
+    }
+
+    #[test]
+    fn test_interp_next_stmt() {
+        let mut parser = Parser::new(Lexer::new("let a = 0\nwhile a < 3 {\n a = a + 1\nif a == 1 { next }\na\n}\n"));
+        let mut interpreter = Interpreter::default();
+        let out = interpreter.interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "a = 0");
+        let out = interpreter.interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "a = 2\n2\na = 3\n3\n");
+    }
+
+    #[test]
+    fn test_interp_break_stmt() {
+        let mut parser = Parser::new(Lexer::new("let a = 0\nwhile a < 3 {\n a = a + 1\nif a == 2 { break }\n}\n"));
+        let mut interpreter = Interpreter::default();
+        let out = interpreter.interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "a = 0");
+        let out = interpreter.interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "a = 1\n");
+    }
+
+    #[test]
+    fn test_interp_let_stmt() {
+        let mut parser = Parser::new(Lexer::new("let a = \"hi\"\na\n"));
+        let mut interpreter = Interpreter::default();
+        let out = interpreter.interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "a = hi");
+        let out = interpreter.interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "hi");
+    }
+
+    #[test]
+    fn test_interp_assign_stmt() {
+        let mut parser = Parser::new(Lexer::new("let a = \"hi\"\na = 1\na\n"));
+        let mut interpreter = Interpreter::default();
+        let out = interpreter.interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "a = hi");
+        let out = interpreter.interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "a = 1");
+        let out = interpreter.interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "1");
+    }
+
+    #[test]
+    fn test_interp_func() {
+        let mut parser = Parser::new(Lexer::new("def f(a) {\nreturn a\n}\nf(1)\n"));
+        let mut interpreter = Interpreter::default();
+        let out = interpreter.interp(&parser.next().unwrap());
+        assert_eq!(out, None);
+        let out = interpreter.interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "1");
+    }
+
+    #[test]
+    fn test_interp_concat_expr() {
+        let mut parser = Parser::new(Lexer::new("1 & 2\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "12");
+    }
+
+    #[test]
+    fn test_interp_add_expr() {
+        let mut parser = Parser::new(Lexer::new("1 + 2\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "3");
+    }
+
+    #[test]
+    fn test_interp_sub_expr() {
+        let mut parser = Parser::new(Lexer::new("2.0 - 1.5\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "0.5");
+    }
+
+    #[test]
+    fn test_interp_mul_expr() {
+        let mut parser = Parser::new(Lexer::new("2 * 3\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "6");
+    }
+
+    #[test]
+    fn test_interp_fdiv_expr() {
+        let mut parser = Parser::new(Lexer::new("1 / 2\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "0.5");
+    }
+
+    #[test]
+    fn test_interp_ge_expr() {
+        let mut parser = Parser::new(Lexer::new("1 >= 1\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "True");
+    }
+
+    #[test]
+    fn test_interp_gt_expr() {
+        let mut parser = Parser::new(Lexer::new("1 > 1\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "False");
+    }
+
+    #[test]
+    fn test_interp_le_expr() {
+        let mut parser = Parser::new(Lexer::new("1 <= 1\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "True");
+    }
+
+    #[test]
+    fn test_interp_lt_expr() {
+        let mut parser = Parser::new(Lexer::new("1 < 1\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "False");
+    }
+
+    #[test]
+    fn test_interp_stringify_expr() {
+        let mut parser = Parser::new(Lexer::new("1 + &1\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "Runtime error: Right operand had incompatible type.");
+    }
+
+    #[test]
+    fn test_interp_numberify_expr() {
+        let mut parser = Parser::new(Lexer::new("1 + +\"1\"\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "2");
+    }
+
+    #[test]
+    fn test_interp_negate_expr() {
+        let mut parser = Parser::new(Lexer::new("!True\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "False");
     }
 }
