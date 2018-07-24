@@ -646,6 +646,13 @@ mod tests {
     }
 
     #[test]
+    fn test_interp_next_stmt_no_loop() {
+        let mut parser = Parser::new(Lexer::new("next\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "Runtime error: next with no enclosing loop");
+    }
+
+    #[test]
     fn test_interp_break_stmt() {
         let mut parser = Parser::new(Lexer::new("let a = 0\nwhile a < 3 {\n a = a + 1\nif a == 2 { break }\n}\n"));
         let mut interpreter = Interpreter::default();
@@ -653,6 +660,13 @@ mod tests {
         assert_eq!(out, "a = 0");
         let out = interpreter.interp(&parser.next().unwrap()).unwrap();
         assert_eq!(out, "a = 1\n");
+    }
+
+    #[test]
+    fn test_interp_break_stmt_no_loop() {
+        let mut parser = Parser::new(Lexer::new("break\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "Runtime error: break with no enclosing loop");
     }
 
     #[test]
@@ -678,6 +692,14 @@ mod tests {
     }
 
     #[test]
+    fn test_interp_group_expr() {
+        let mut parser = Parser::new(Lexer::new("(1 + 2)\n"));
+        let mut interpreter = Interpreter::default();
+        let out = interpreter.interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "3");
+    }
+
+    #[test]
     fn test_interp_func() {
         let mut parser = Parser::new(Lexer::new("def f(a) {\nreturn a\n}\nf(1)\n"));
         let mut interpreter = Interpreter::default();
@@ -685,6 +707,27 @@ mod tests {
         assert_eq!(out, None);
         let out = interpreter.interp(&parser.next().unwrap()).unwrap();
         assert_eq!(out, "1");
+    }
+
+    #[test]
+    fn test_interp_return_stmt_no_fn() {
+        let mut parser = Parser::new(Lexer::new("return 1\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "Runtime error: return with no enclosing function");
+    }
+
+    #[test]
+    fn test_interp_and_expr() {
+        let mut parser = Parser::new(Lexer::new("True and False\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "False");
+    }
+
+    #[test]
+    fn test_interp_or_expr() {
+        let mut parser = Parser::new(Lexer::new("True or False\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "True");
     }
 
     #[test]
@@ -720,6 +763,20 @@ mod tests {
         let mut parser = Parser::new(Lexer::new("1 / 2\n"));
         let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
         assert_eq!(out, "0.5");
+    }
+
+    #[test]
+    fn test_interp_eq_expr() {
+        let mut parser = Parser::new(Lexer::new("1 == 1\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "True");
+    }
+
+    #[test]
+    fn test_interp_neq_expr() {
+        let mut parser = Parser::new(Lexer::new("1 != 1\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "False");
     }
 
     #[test]
@@ -766,6 +823,13 @@ mod tests {
 
     #[test]
     fn test_interp_negate_expr() {
+        let mut parser = Parser::new(Lexer::new("-\"1.0\"\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "-1");
+    }
+
+    #[test]
+    fn test_interp_not_expr() {
         let mut parser = Parser::new(Lexer::new("!True\n"));
         let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
         assert_eq!(out, "False");
