@@ -6,7 +6,8 @@ addons:
     packages:
       - libssl-dev
 cache: cargo
+before_cache:
+  - RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install cargo-tarpaulin
 after_success: |
-  RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install cargo-tarpaulin &&
   cargo tarpaulin --out Xml &&
   bash <(curl -s https://codecov.io/bash)
