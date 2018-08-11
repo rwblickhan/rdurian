@@ -27,6 +27,7 @@ impl<'a> Lexer<'a> {
             '*' => Some(Token::Star(self.curr_line)),
             '/' => Some(Token::Slash(self.curr_line)),
             '%' => Some(Token::Modulo(self.curr_line)),
+            '^' => Some(Token::Caret(self.curr_line)),
             '=' => {
                 match self.iter.next() {
                     None => Some(Token::Equal(self.curr_line)),
@@ -339,6 +340,13 @@ mod tests {
     fn test_lex_single_modulo() {
         let mut lexer = Lexer::new(&"%");
         assert_eq!(Token::Modulo(0),
+                   lexer.next().unwrap())
+    }
+
+    #[test]
+    fn test_lex_single_caret() {
+        let mut lexer = Lexer::new(&"^");
+        assert_eq!(Token::Caret(0),
                    lexer.next().unwrap())
     }
 
