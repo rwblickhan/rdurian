@@ -276,6 +276,7 @@ impl Interpreter {
                     Token::Minus(_line) => Ok(self.interp_sub(&left_obj, &right_obj)?),
                     Token::Star(_line) => Ok(self.interp_mul(&left_obj, &right_obj)?),
                     Token::Slash(_line) => Ok(self.interp_fdiv(&left_obj, &right_obj)?),
+                    Token::Modulo(_line) => Ok(self.interp_mod(&left_obj, &right_obj)?),
                     Token::BangEqual(_line) => Ok(RuntimeObject::Bool(!left_obj.eq(&right_obj))),
                     Token::EqualEqual(_line) => Ok(RuntimeObject::Bool(left_obj.eq(&right_obj))),
                     Token::GreaterEqual(_line) => Ok(self.interp_ge(&left_obj, &right_obj)?),
@@ -449,6 +450,20 @@ impl Interpreter {
                 match *right {
                     RuntimeObject::Float(right_float) => {
                         Ok(RuntimeObject::Float(left_float / right_float))
+                    }
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
+                }
+            }
+            _ => Err(RuntimeException::RuntimeError("Left operand had incompatible type.".to_string()))
+        }
+    }
+
+    fn interp_mod(&self, left: &RuntimeObject, right: &RuntimeObject) -> Result<RuntimeObject, RuntimeException> {
+        match *left {
+            RuntimeObject::Integer(left_int) => {
+                match *right {
+                    RuntimeObject::Integer(right_int) => {
+                        Ok(RuntimeObject::Integer((left_int % right_int + right_int) % right_int))
                     }
                     _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
@@ -763,6 +778,20 @@ mod tests {
         let mut parser = Parser::new(Lexer::new("1 / 2\n"));
         let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
         assert_eq!(out, "0.5");
+    }
+
+    #[test]
+    fn test_interp_mod_expr() {
+        let mut parser = Parser::new(Lexer::new("21 % 4\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "1");
+    }
+
+    #[test]
+    fn test_interp_mod_neg_expr() {
+        let mut parser = Parser::new(Lexer::new("-21 % 4\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "3");
     }
 
     #[test]
