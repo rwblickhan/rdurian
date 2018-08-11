@@ -294,6 +294,7 @@ impl Interpreter {
                     Token::Minus(_line) => self.interp_negate(&right_obj),
                     Token::Ampersand(_line) => Ok(self.interp_stringify(&right_obj)?),
                     Token::Bang(_line) => Ok(RuntimeObject::Bool(!is_truthy(&right_obj))),
+                    Token::Slash(_line) => self.interp_sqrt(&right_obj),
                     _ => Err(RuntimeException::RuntimeError("Unexpected token found for unary operator.".to_string()))
                 }
             }
@@ -600,6 +601,14 @@ impl Interpreter {
             RuntimeObject::Float(f) => Ok(RuntimeObject::String(f.to_string())),
             RuntimeObject::Bool(b) => Ok(RuntimeObject::String(b.to_string())),
             _ => Err(RuntimeException::RuntimeError(format!("Cannot stringify {}", right)))
+        }
+    }
+
+    fn interp_sqrt(&self, right: &RuntimeObject) -> Result<RuntimeObject, RuntimeException> {
+        match *right {
+            RuntimeObject::Integer(i) => Ok(RuntimeObject::Float(f64::from(i).sqrt())),
+            RuntimeObject::Float(f) => Ok(RuntimeObject::Float(f.sqrt())),
+            _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
         }
     }
 
@@ -923,5 +932,19 @@ mod tests {
         let mut parser = Parser::new(Lexer::new("!True\n"));
         let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
         assert_eq!(out, "False");
+    }
+
+    #[test]
+    fn test_interp_sqrt_int_expr() {
+        let mut parser = Parser::new(Lexer::new("/4\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "2");
+    }
+
+    #[test]
+    fn test_interp_sqrt_float_expr() {
+        let mut parser = Parser::new(Lexer::new("/5.0\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "2.23606797749979");
     }
 }
