@@ -81,14 +81,14 @@ impl<'a> Parser<'a> {
                 match self.parse_block_stmt()? {
                     None => Err(SyntaxError::new("While statement missing body.".to_string(),
                                                  Some(opening_brace))),
-                    Some(stmt) => Ok(Some(Stmt::While { cond: Box::new(cond), body: Box::new(stmt) }))
+                    Some(stmt) => Ok(Some(Stmt::While { token: curr_token, cond: Box::new(cond), body: Box::new(stmt) }))
                 }
             }
             Token::Next(_line) => {
-                Ok(Some(Stmt::Next))
+                Ok(Some(Stmt::Next(curr_token)))
             }
             Token::Break(_line) => {
-                Ok(Some(Stmt::Break))
+                Ok(Some(Stmt::Break(curr_token)))
             }
             Token::Let(_line) => {
                 let ident = match self.parse_ident()? {
@@ -107,7 +107,7 @@ impl<'a> Parser<'a> {
                 match self.parse_expr()? {
                     None => Err(SyntaxError::new("Let statement missing assignment expression.".to_string(),
                                                  Some(curr_token))),
-                    Some(expr) => Ok(Some(Stmt::Let { ident: Box::new(ident), expr: Box::new(expr) }))
+                    Some(expr) => Ok(Some(Stmt::Let { token: curr_token, ident: Box::new(ident), expr: Box::new(expr) }))
                 }
             }
             Token::Print(_line) => {
@@ -116,7 +116,7 @@ impl<'a> Parser<'a> {
                     Ok(opt_expr) => match opt_expr {
                         None => Err(SyntaxError::new("Print statement missing expression.".to_string(),
                                                      Some(curr_token))),
-                        Some(expr) => Ok(Some(Stmt::Print { expr: Box::new(expr) }))
+                        Some(expr) => Ok(Some(Stmt::Print { token: curr_token, expr: Box::new(expr) }))
                     }
                 }
             }
@@ -124,21 +124,21 @@ impl<'a> Parser<'a> {
                 match self.parse_expr()? {
                     None => Err(SyntaxError::new("Err statement missing expression.".to_string(),
                                                  Some(curr_token))),
-                    Some(expr) => Ok(Some(Stmt::Err { expr: Box::new(expr) }))
+                    Some(expr) => Ok(Some(Stmt::Err { token: curr_token, expr: Box::new(expr) }))
                 }
             }
             Token::Scan(_line) => {
                 match self.parse_ident()? {
                     None => Err(SyntaxError::new("Scan statement missing identifier.".to_string(),
                                                  Some(curr_token))),
-                    Some(expr) => Ok(Some(Stmt::Scan { ident: Box::new(expr) }))
+                    Some(expr) => Ok(Some(Stmt::Scan { token: curr_token, ident: Box::new(expr) }))
                 }
             }
             Token::Return(_line) => {
                 match self.parse_expr()? {
                     None => Err(SyntaxError::new("Return statement missing expression.".to_string(),
                                                  Some(curr_token))),
-                    Some(expr) => Ok(Some(Stmt::Return { expr: Box::new(expr) }))
+                    Some(expr) => Ok(Some(Stmt::Return { token: curr_token, expr: Box::new(expr) }))
                 }
             }
             Token::Def(_line) => {
@@ -160,8 +160,8 @@ impl<'a> Parser<'a> {
                     }
                 };
                 let mut params = Vec::new();
-                while let Some(curr_token) = self.get_next_token(false)? {
-                    match curr_token {
+                while let Some(next_token) = self.get_next_token(false)? {
+                    match next_token {
                         Token::Comma(_line) => continue,
                         Token::RightParen(_line) => {
                             let token = match self.get_next_token(false)? {
@@ -178,8 +178,9 @@ impl<'a> Parser<'a> {
 
                             match self.parse_block_stmt()? {
                                 None => return Err(SyntaxError::new("While statement missing body.".to_string(),
-                                                                    Some(curr_token))),
+                                                                    Some(next_token))),
                                 Some(stmt) => return Ok(Some(Stmt::FnDecl {
+                                    token: curr_token,
                                     ident: Box::new(ident),
                                     params,
                                     body: Box::new(stmt),
@@ -187,10 +188,10 @@ impl<'a> Parser<'a> {
                             }
                         }
                         _ => {
-                            self.unused_lookahead = Some(curr_token.clone());
+                            self.unused_lookahead = Some(next_token.clone());
                             let param = match self.parse_ident()? {
                                 None => return Err(SyntaxError::new("Function definition parameter not a valid lvalue.".to_string(),
-                                                                    Some(curr_token.clone()))),
+                                                                    Some(next_token.clone()))),
                                 Some(expr) => expr
                             };
                             params.push(Box::new(param));
@@ -250,7 +251,12 @@ impl<'a> Parser<'a> {
         };
 
         let next_token = match self.get_next_token(true)? {
-            None => return Ok(Some(Stmt::If { cond: Box::new(cond), true_body: Box::new(body), false_body: None })),
+            None => return Ok(Some(Stmt::If {
+                token: curr_token.clone(),
+                cond: Box::new(cond),
+                true_body: Box::new(body),
+                false_body: None,
+            })),
             Some(token) => token
         };
 
@@ -261,6 +267,7 @@ impl<'a> Parser<'a> {
                     Some(stmt) => stmt
                 };
                 Ok(Some(Stmt::If {
+                    token: curr_token.clone(),
                     cond: Box::new(cond),
                     true_body: Box::new(body),
                     false_body: Some(Box::new(elif_stmt)),
@@ -282,6 +289,7 @@ impl<'a> Parser<'a> {
                     Some(stmt) => stmt
                 };
                 Ok(Some(Stmt::If {
+                    token: curr_token.clone(),
                     cond: Box::new(cond),
                     true_body: Box::new(body),
                     false_body: Some(Box::new(false_body)),
@@ -289,7 +297,12 @@ impl<'a> Parser<'a> {
             }
             _ => {
                 self.unused_lookahead = Some(next_token);
-                Ok(Some(Stmt::If { cond: Box::new(cond), true_body: Box::new(body), false_body: None }))
+                Ok(Some(Stmt::If {
+                    token: curr_token.clone(),
+                    cond: Box::new(cond),
+                    true_body: Box::new(body),
+                    false_body: None,
+                }))
             }
         }
     }
@@ -749,7 +762,7 @@ mod tests {
     fn test_parse_if_stmt_no_false_body() {
         let mut parse = Parser::new(Lexer::new("if a {\n    break\n}\n"));
         match parse.next().unwrap() {
-            Stmt::If { cond, true_body, false_body } => {
+            Stmt::If { token: _, cond, true_body, false_body } => {
                 match *cond {
                     Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                     _ => panic!()
@@ -758,7 +771,7 @@ mod tests {
                     Stmt::Block { stmts } => {
                         let stmt = &**stmts.iter().next().unwrap();
                         match *stmt {
-                            Stmt::Break => (),
+                            Stmt::Break(_) => (),
                             _ => panic!()
                         }
                     }
@@ -777,7 +790,7 @@ mod tests {
     fn test_parse_multilevel_if_stmt() {
         let mut parse = Parser::new(Lexer::new("if a {\n    break\n} elif b {\n    next\n} else {\n    break\n}\n"));
         match parse.next().unwrap() {
-            Stmt::If { cond, true_body, false_body } => {
+            Stmt::If { token: _, cond, true_body, false_body } => {
                 match *cond {
                     Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                     _ => panic!()
@@ -786,14 +799,14 @@ mod tests {
                     Stmt::Block { stmts } => {
                         let stmt = &**stmts.iter().next().unwrap();
                         match *stmt {
-                            Stmt::Break => (),
+                            Stmt::Break(_) => (),
                             _ => panic!()
                         }
                     }
                     _ => panic!()
                 };
                 match *false_body.unwrap() {
-                    Stmt::If { cond, true_body, false_body } => {
+                    Stmt::If { token: _, cond, true_body, false_body } => {
                         match *cond {
                             Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 2, literal: "b".to_string() }),
                             _ => panic!()
@@ -802,7 +815,7 @@ mod tests {
                             Stmt::Block { stmts } => {
                                 let stmt = &**stmts.iter().next().unwrap();
                                 match *stmt {
-                                    Stmt::Next => (),
+                                    Stmt::Next(_) => (),
                                     _ => panic!()
                                 }
                             }
@@ -812,7 +825,7 @@ mod tests {
                             Stmt::Block { stmts } => {
                                 let stmt = &**stmts.iter().next().unwrap();
                                 match *stmt {
-                                    Stmt::Break => return,
+                                    Stmt::Break(_) => return,
                                     _ => panic!()
                                 }
                             }
@@ -832,7 +845,7 @@ mod tests {
         match parser.next() {
             None => panic!(),
             Some(stmt) => match stmt {
-                Stmt::Break => return,
+                Stmt::Break(_) => return,
                 _ => panic!()
             }
         }
@@ -844,7 +857,7 @@ mod tests {
         match parser.next() {
             None => panic!(),
             Some(stmt) => match stmt {
-                Stmt::Break => return,
+                Stmt::Break(_) => return,
                 _ => panic!()
             }
         }
@@ -854,7 +867,7 @@ mod tests {
     fn test_parse_while_stmt() {
         let mut parser = Parser::new(Lexer::new("while a {\n    break\n}\n"));
         match parser.next().unwrap() {
-            Stmt::While { cond, body } => {
+            Stmt::While { token: _, cond, body } => {
                 match *cond {
                     Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                     _ => panic!()
@@ -863,7 +876,7 @@ mod tests {
                     Stmt::Block { stmts } => {
                         let stmt = &**stmts.iter().next().unwrap();
                         match *stmt {
-                            Stmt::Break => return,
+                            Stmt::Break(_) => return,
                             _ => panic!()
                         }
                     }
@@ -878,7 +891,7 @@ mod tests {
     fn test_parse_next_stmt() {
         let mut parser = Parser::new(Lexer::new("next\n"));
         match parser.next().unwrap() {
-            Stmt::Next => return,
+            Stmt::Next(_) => return,
             _ => panic!()
         }
     }
@@ -887,7 +900,7 @@ mod tests {
     fn test_parse_break_stmt() {
         let mut parser = Parser::new(Lexer::new("break\n"));
         match parser.next().unwrap() {
-            Stmt::Break => return,
+            Stmt::Break(_) => return,
             _ => panic!()
         }
     }
@@ -896,7 +909,7 @@ mod tests {
     fn test_parse_let_stmt() {
         let mut parser = Parser::new(Lexer::new("let a = 1 + 2\n"));
         match parser.next().unwrap() {
-            Stmt::Let { ident, expr } => {
+            Stmt::Let { token: _, ident, expr } => {
                 match *ident {
                     Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                     _ => panic!()
@@ -958,7 +971,7 @@ mod tests {
     fn test_parse_print_stmt() {
         let mut parser = Parser::new(Lexer::new("print a\n"));
         match parser.next().unwrap() {
-            Stmt::Print { expr } => {
+            Stmt::Print { token: _, expr } => {
                 match *expr {
                     Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                     _ => panic!()
@@ -972,7 +985,7 @@ mod tests {
     fn test_parse_err_stmt() {
         let mut parser = Parser::new(Lexer::new("err a\n"));
         match parser.next().unwrap() {
-            Stmt::Err { expr } => {
+            Stmt::Err { token: _, expr } => {
                 match *expr {
                     Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                     _ => panic!()
@@ -986,7 +999,7 @@ mod tests {
     fn test_parse_scan_stmt() {
         let mut parser = Parser::new(Lexer::new("scan a\n"));
         match parser.next().unwrap() {
-            Stmt::Scan { ident } => {
+            Stmt::Scan { token: _, ident } => {
                 match *ident {
                     Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                     _ => panic!()
@@ -1000,7 +1013,7 @@ mod tests {
     fn test_parse_return_stmt() {
         let mut parser = Parser::new(Lexer::new("return a\n"));
         match parser.next().unwrap() {
-            Stmt::Return { expr } => {
+            Stmt::Return { token: _, expr } => {
                 match *expr {
                     Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "a".to_string() }),
                     _ => panic!()
@@ -1014,7 +1027,7 @@ mod tests {
     fn test_parse_fn_decl() {
         let mut parser = Parser::new(Lexer::new("def f(a,b) {\n return 1.0\n}\n"));
         match parser.next().unwrap() {
-            Stmt::FnDecl { ident, params, body } => {
+            Stmt::FnDecl { token: _, ident, params, body } => {
                 match *ident {
                     Expr::Identifier { ident } => assert_eq!(ident, Token::Identifier { line: 0, literal: "f".to_string() }),
                     _ => panic!()
@@ -1036,7 +1049,7 @@ mod tests {
                     Stmt::Block { stmts } => {
                         let stmt = &**stmts.iter().next().unwrap();
                         match stmt {
-                            &Stmt::Return { ref expr } => {
+                            &Stmt::Return { token: _, ref expr } => {
                                 match **expr {
                                     Expr::Literal { ref value } => assert_eq!(*value,
                                                                               Token::Float { line: 1, literal: 1.0 }),
@@ -1060,7 +1073,7 @@ mod tests {
             Stmt::Block { stmts } => {
                 let stmt = &**stmts.iter().next().unwrap();
                 match stmt {
-                    &Stmt::Next => return,
+                    &Stmt::Next(_) => return,
                     _ => panic!()
                 }
             }
@@ -1076,10 +1089,10 @@ mod tests {
                 let mut iter = stmts.iter();
                 let next_stmt = &**iter.next().unwrap();
                 match next_stmt {
-                    &Stmt::Next => {
+                    &Stmt::Next(_) => {
                         let break_stmt = &**iter.next().unwrap();
                         match break_stmt {
-                            &Stmt::Break => return,
+                            &Stmt::Break(_) => return,
                             _ => panic!()
                         }
                     }
