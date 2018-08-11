@@ -3,17 +3,17 @@ use token::Token;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Block { stmts: Vec<Box<Stmt>> },
-    If { cond: Box<Expr>, true_body: Box<Stmt>, false_body: Option<Box<Stmt>> },
-    While { cond: Box<Expr>, body: Box<Stmt> },
-    Next,
-    Break,
-    Let { ident: Box<Expr>, expr: Box<Expr> },
+    If { token: Token, cond: Box<Expr>, true_body: Box<Stmt>, false_body: Option<Box<Stmt>> },
+    While { token: Token, cond: Box<Expr>, body: Box<Stmt> },
+    Next(Token),
+    Break(Token),
+    Let { token: Token, ident: Box<Expr>, expr: Box<Expr> },
     Assign { ident: Box<Expr>, expr: Box<Expr> },
-    Print { expr: Box<Expr> },
-    Err { expr: Box<Expr> },
-    Scan { ident: Box<Expr> },
-    Return { expr: Box<Expr> },
-    FnDecl { ident: Box<Expr>, params: Vec<Box<Expr>>, body: Box<Stmt> },
+    Print { token: Token, expr: Box<Expr> },
+    Err { token: Token, expr: Box<Expr> },
+    Scan { token: Token, ident: Box<Expr> },
+    Return { token: Token, expr: Box<Expr> },
+    FnDecl { token: Token, ident: Box<Expr>, params: Vec<Box<Expr>>, body: Box<Stmt> },
     Expr { expr: Box<Expr> },
 }
 
