@@ -277,6 +277,7 @@ impl Interpreter {
                     Token::Star(_line) => Ok(self.interp_mul(&left_obj, &right_obj)?),
                     Token::Slash(_line) => Ok(self.interp_fdiv(&left_obj, &right_obj)?),
                     Token::Modulo(_line) => Ok(self.interp_mod(&left_obj, &right_obj)?),
+                    Token::Caret(_line) => Ok(self.interp_exp(&left_obj, &right_obj)?),
                     Token::BangEqual(_line) => Ok(RuntimeObject::Bool(!left_obj.eq(&right_obj))),
                     Token::EqualEqual(_line) => Ok(RuntimeObject::Bool(left_obj.eq(&right_obj))),
                     Token::GreaterEqual(_line) => Ok(self.interp_ge(&left_obj, &right_obj)?),
@@ -464,6 +465,38 @@ impl Interpreter {
                 match *right {
                     RuntimeObject::Integer(right_int) => {
                         Ok(RuntimeObject::Integer((left_int % right_int + right_int) % right_int))
+                    }
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
+                }
+            }
+            _ => Err(RuntimeException::RuntimeError("Left operand had incompatible type.".to_string()))
+        }
+    }
+
+    fn interp_exp(&self, left: &RuntimeObject, right: &RuntimeObject) -> Result<RuntimeObject, RuntimeException> {
+        match *left {
+            RuntimeObject::Integer(base) => {
+                match *right {
+                    RuntimeObject::Integer(pow) => {
+                        if pow >= 0 {
+                            Ok(RuntimeObject::Integer(base.pow(pow as u32)))
+                        } else {
+                            Ok(RuntimeObject::Float(f64::from(base).powf(f64::from(pow))))
+                        }
+                    }
+                    RuntimeObject::Float(pow) => {
+                        Ok(RuntimeObject::Float(f64::from(base).powf(pow)))
+                    }
+                    _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
+                }
+            }
+            RuntimeObject::Float(base) => {
+                match *right {
+                    RuntimeObject::Integer(pow) => {
+                        Ok(RuntimeObject::Float(base.powi(pow)))
+                    }
+                    RuntimeObject::Float(pow) => {
+                        Ok(RuntimeObject::Float(base.powf(pow)))
                     }
                     _ => Err(RuntimeException::RuntimeError("Right operand had incompatible type.".to_string()))
                 }
@@ -792,6 +825,34 @@ mod tests {
         let mut parser = Parser::new(Lexer::new("-21 % 4\n"));
         let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
         assert_eq!(out, "3");
+    }
+
+    #[test]
+    fn test_interp_exp_expr() {
+        let mut parser = Parser::new(Lexer::new("2 ^ 2\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "4");
+    }
+
+    #[test]
+    fn test_interp_exp_neg_pow_expr() {
+        let mut parser = Parser::new(Lexer::new("2 ^ -2\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "0.25");
+    }
+
+    #[test]
+    fn test_interp_exp_float_base_expr() {
+        let mut parser = Parser::new(Lexer::new("2.0 ^ 2\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "4");
+    }
+
+    #[test]
+    fn test_interp_exp_float_base_float_pow_expr() {
+        let mut parser = Parser::new(Lexer::new("4.0 ^ 0.5\n"));
+        let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
+        assert_eq!(out, "2");
     }
 
     #[test]
