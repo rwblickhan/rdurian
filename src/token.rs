@@ -85,7 +85,7 @@ impl fmt::Display for Token {
             Token::Lesser(line) => write!(f, "< (line {})", line),
             Token::LesserEqual(line) => write!(f, "<= (line {})", line),
             Token::String { ref line, ref literal } => write!(f, "{} (line {})", literal, line),
-            Token::Integer { ref line, ref literal } => write!(f, "{} (line {})", literal, line ),
+            Token::Integer { ref line, ref literal } => write!(f, "{} (line {})", literal, line),
             Token::Float { ref line, ref literal } => write!(f, "{} (line {})", literal, line),
             Token::True(line) => write!(f, "True (line {})", line),
             Token::False(line) => write!(f, "False (line {})", line),

@@ -5,7 +5,7 @@ use clap::{App, Arg};
 use rdurian::lexer::Lexer;
 use rdurian::parser::Parser;
 use rdurian::pretty_printer::*;
-use rdurian::treewalk_interpreter::{Interpreter};
+use rdurian::treewalk_interpreter::Interpreter;
 use std::io::{stdin, stdout, Write};
 use std::fs;
 

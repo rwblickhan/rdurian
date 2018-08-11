@@ -24,7 +24,7 @@ pub enum Expr {
     Literal { value: Token },
     Identifier { ident: Token },
     Grouping { expr: Box<Expr> },
-    FnCall { ident: Box<Expr>, args: Vec<Box<Expr>> }
+    FnCall { ident: Box<Expr>, args: Vec<Box<Expr>> },
 }
 
 pub struct SyntaxError {
