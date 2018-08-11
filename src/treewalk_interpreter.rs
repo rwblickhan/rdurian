@@ -934,7 +934,7 @@ mod tests {
     fn test_interp_stringify_expr() {
         let mut parser = Parser::new(Lexer::new("1 + &1\n"));
         let out = Interpreter::default().interp(&parser.next().unwrap()).unwrap();
-        assert_eq!(out, "Runtime error: Right operand had incompatible type.");
+        assert_eq!(out, "Runtime error: Right operand to + (line 0) not numeric type");
     }
 
     #[test]
