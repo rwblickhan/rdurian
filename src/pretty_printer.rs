@@ -14,20 +14,20 @@ pub fn pretty_print_stmt(stmt: &Stmt) -> String {
             buffer
         }
         Stmt::If { token: _, ref cond, ref true_body, ref false_body } => format!("if {} do {} else do {};",
-                                                                                pretty_print_expr(&cond),
-                                                                                pretty_print_stmt(&true_body),
-                                                                                match *false_body {
-                                                                                    None => "nothing;".to_string(),
-                                                                                    Some(ref stmt) => pretty_print_stmt(stmt)
-                                                                                }),
+                                                                                  pretty_print_expr(&cond),
+                                                                                  pretty_print_stmt(&true_body),
+                                                                                  match *false_body {
+                                                                                      None => "nothing;".to_string(),
+                                                                                      Some(ref stmt) => pretty_print_stmt(stmt)
+                                                                                  }),
         Stmt::While { token: _, ref cond, ref body } => format!("while {} do {};",
-                                                              pretty_print_expr(cond),
-                                                              pretty_print_stmt(body)),
+                                                                pretty_print_expr(cond),
+                                                                pretty_print_stmt(body)),
         Stmt::Next(_) => "next;".to_string(),
         Stmt::Break(_) => "break;".to_string(),
         Stmt::Let { token: _, ref ident, ref expr } => format!("let {} be {};",
-                                                             pretty_print_expr(ident),
-                                                             pretty_print_expr(expr)),
+                                                               pretty_print_expr(ident),
+                                                               pretty_print_expr(expr)),
         Stmt::Assign { ref ident, ref expr } => format!("assign {} to {};",
                                                         pretty_print_expr(expr),
                                                         pretty_print_expr(ident)),
