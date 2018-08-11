@@ -499,7 +499,7 @@ impl<'a> Parser<'a> {
         };
         while let Some(operator) = self.get_next_token(true)? {
             match operator {
-                Token::Star(_line) | Token::Slash(_line) => {
+                Token::Star(_line) | Token::Slash(_line) | Token::Modulo(_line) => {
                     let right = match self.parse_unary_expr()? {
                         None => return Err(SyntaxError::new("Expression missing right side.".to_string(),
                                                             Some(operator))),
@@ -1533,6 +1533,46 @@ mod tests {
                     match **left {
                         Expr::Binary { ref left, ref operator, ref right } => {
                             if !operator.eq(&Token::Slash(0)) {
+                                panic!()
+                            }
+                            match **left {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) => (),
+                                _ => panic!()
+                            };
+                            match **right {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "b".to_string() }) => (),
+                                _ => panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_mod_expr() {
+        let mut parser = Parser::new(Lexer::new("a % b % c\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Binary { ref left, ref operator, ref right } => {
+                    if !operator.eq(&Token::Modulo(0)) {
+                        panic!()
+                    }
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "c".to_string() }) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                    match **left {
+                        Expr::Binary { ref left, ref operator, ref right } => {
+                            if !operator.eq(&Token::Modulo(0)) {
                                 panic!()
                             }
                             match **left {
