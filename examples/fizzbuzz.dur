@@ -1,0 +1,19 @@
+print "Enter a limit:"
+let limit = ""
+scan limit
+let count = 1
+while count < +limit {
+    let out = ""
+    if count % 3 == 0 {
+        out = out & "Fizz"
+    }
+    if count % 5 == 0 {
+        out = out & "Buzz"
+    }
+    if out == "" {
+        out = &count
+    }
+    print out
+    count = count + 1
+}
+print "done"
