@@ -574,6 +574,13 @@ impl<'a> Parser<'a> {
                     Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
                 }
             }
+            Token::Slash(_line) => {
+                match self.parse_unary_expr()? {
+                    None => Err(SyntaxError::new("Square root unary expression missing operand.".to_string(),
+                                                 Some(curr_token))),
+                    Some(expr) => Ok(Some(Expr::Unary { operator: curr_token, right: Box::new(expr) }))
+                }
+            }
             Token::LeftParen(_line) => {
                 match self.parse_expr()? {
                     None => Err(SyntaxError::new("Unexpected end of file.".to_string(),
@@ -1735,6 +1742,30 @@ mod tests {
             Stmt::Expr { expr } => match *expr {
                 Expr::Unary { ref operator, ref right } => {
                     if !operator.eq(&Token::Ampersand(0)) {
+                        panic!()
+                    }
+                    match **right {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) {
+                                panic!();
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_square_root_expr() {
+        let mut parser = Parser::new(Lexer::new("/a\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Unary { ref operator, ref right } => {
+                    if !operator.eq(&Token::Slash(0)) {
                         panic!()
                     }
                     match **right {
