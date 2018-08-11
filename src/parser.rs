@@ -493,14 +493,14 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_mul_expr(&mut self) -> Result<Option<Expr>, SyntaxError> {
-        let mut expr = match self.parse_unary_expr()? {
+        let mut expr = match self.parse_exp_expr()? {
             None => return Ok(None),
             Some(expr) => expr
         };
         while let Some(operator) = self.get_next_token(true)? {
             match operator {
                 Token::Star(_line) | Token::Slash(_line) | Token::Modulo(_line) => {
-                    let right = match self.parse_unary_expr()? {
+                    let right = match self.parse_exp_expr()? {
                         None => return Err(SyntaxError::new("Expression missing right side.".to_string(),
                                                             Some(operator))),
                         Some(expr) => expr
@@ -510,6 +510,29 @@ impl<'a> Parser<'a> {
                 _ => {
                     self.unused_lookahead = Some(operator);
                     break;
+                }
+            }
+        }
+        Ok(Some(expr))
+    }
+
+    fn parse_exp_expr(&mut self) -> Result<Option<Expr>, SyntaxError> {
+        let expr = match self.parse_unary_expr()? {
+            None => return Ok(None),
+            Some(expr) => expr
+        };
+        if let Some(operator) = self.get_next_token(true)? {
+            match operator {
+                Token::Caret(_line) => {
+                    let right = match self.parse_exp_expr()? {
+                        None => return Err(SyntaxError::new("Expression missing right side.".to_string(),
+                                                            Some(operator))),
+                        Some(expr) => expr
+                    };
+                    return Ok(Some(Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) }));
+                }
+                _ => {
+                    self.unused_lookahead = Some(operator);
                 }
             }
         }
@@ -1581,6 +1604,46 @@ mod tests {
                             };
                             match **right {
                                 Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "b".to_string() }) => (),
+                                _ => panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                }
+                _ => panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_exp_expr() {
+        let mut parser = Parser::new(Lexer::new("a ^ b ^ c\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Binary { ref left, ref operator, ref right } => {
+                    if !operator.eq(&Token::Caret(0)) {
+                        panic!()
+                    }
+                    match **left {
+                        Expr::Identifier { ref ident } => {
+                            if !ident.eq(&Token::Identifier { line: 0, literal: "a".to_string() }) {
+                                panic!()
+                            }
+                        }
+                        _ => panic!()
+                    };
+                    match **right {
+                        Expr::Binary { ref left, ref operator, ref right } => {
+                            if !operator.eq(&Token::Caret(0)) {
+                                panic!()
+                            }
+                            match **left {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "b".to_string() }) => (),
+                                _ => panic!()
+                            };
+                            match **right {
+                                Expr::Identifier { ref ident } if ident.eq(&Token::Identifier { line: 0, literal: "c".to_string() }) => (),
                                 _ => panic!()
                             }
                         }
