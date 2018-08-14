@@ -25,6 +25,8 @@ pub enum Expr {
     Identifier { ident: Token },
     Grouping { expr: Box<Expr> },
     FnCall { ident: Box<Expr>, args: Vec<Box<Expr>> },
+    Exec { command: String, args: Option<Vec<Box<Expr>>> },
+    Pipeline { commands: Vec<Box<Expr>> },
 }
 
 pub struct SyntaxError {
