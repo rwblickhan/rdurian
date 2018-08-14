@@ -5,3 +5,4 @@ authors = ["Russell Blickhan <rwblickhan@gmail.com>"]
 
 [dependencies]
 clap = "2.32.0"
+subprocess = "0.1.13"
