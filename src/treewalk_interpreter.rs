@@ -1,3 +1,5 @@
+extern crate subprocess;
+
 use ast::{Expr, Stmt};
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -50,6 +52,12 @@ enum RuntimeException {
 
 impl From<Error> for RuntimeException {
     fn from(error: Error) -> Self {
+        RuntimeException::RuntimeError(error.to_string())
+    }
+}
+
+impl From<subprocess::PopenError> for RuntimeException {
+    fn from(error: subprocess::PopenError) -> Self {
         RuntimeException::RuntimeError(error.to_string())
     }
 }
@@ -351,6 +359,18 @@ impl Interpreter {
                     }
                     _ => Err(RuntimeException::RuntimeError("Expected a callable".to_string()))
                 }
+            }
+            Expr::Exec { command: _, args: _ } => {
+                let exec = self.gen_exec(expr)?;
+                Ok(RuntimeObject::String(
+                    exec
+                        .stdout(subprocess::Redirection::Pipe)
+                        .capture()?
+                        .stdout_str()))
+            }
+            Expr::Pipeline { commands } => {
+                let pipeline = self.gen_pipeline(commands)?;
+                Ok(RuntimeObject::String(pipeline.capture()?.stdout_str()))
             }
         }
     }
@@ -692,6 +712,52 @@ impl Interpreter {
             }
             _ => Err(RuntimeException::RuntimeError(format!("Operand to {} not convertible to numeric type", operator)))
         }
+    }
+
+    fn gen_exec(&mut self, command: &Expr) -> Result<subprocess::Exec, RuntimeException> {
+        match *command {
+            Expr::Exec { ref command, ref args } => {
+                match *args {
+                    None => Ok(subprocess::Exec::cmd(command)),
+                    Some(ref args) => {
+                        let mut out_args = Vec::new();
+                        for arg in args {
+                            out_args.push(self.interp_expr(&arg)?);
+                        }
+                        let mut out_args_string = Vec::new();
+                        for arg in out_args {
+                            out_args_string.push(
+                                match arg {
+                                    RuntimeObject::String(ref s) => s.clone(),
+                                    RuntimeObject::Integer(i) => i.to_string(),
+                                    RuntimeObject::Float(f) => f.to_string(),
+                                    RuntimeObject::Bool(b) => b.to_string(),
+                                    _ => return Err(RuntimeException::RuntimeError(format!("Parameter to exec command call {} not stringifiable",
+                                                                                           command.clone())))
+                                }
+                            )
+                        }
+                        Ok(subprocess::Exec::cmd(command).args(&out_args_string))
+                    }
+                }
+            }
+            _ => Err(RuntimeException::RuntimeError("Expected exec command".to_string()))
+        }
+    }
+
+    fn gen_pipeline(&mut self, commands: &Vec<Box<Expr>>) -> Result<subprocess::Pipeline, RuntimeException> {
+        let mut prepared_commands = Vec::new();
+        for command in commands {
+            prepared_commands.push(self.gen_exec(&command)?);
+        }
+        let mut iter = prepared_commands.iter();
+        let first = iter.next().unwrap().clone();
+        let second = iter.next().unwrap().clone();
+        let mut pipeline = first | second;
+        while let Some(exec) = iter.next() {
+            pipeline = pipeline | exec.clone();
+        }
+        Ok(pipeline)
     }
 }
 
