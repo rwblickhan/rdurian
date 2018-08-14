@@ -1,6 +1,7 @@
 use ast::{Expr, Stmt};
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
+use std::env;
 use std::fmt;
 use std::f64;
 use std::io::{stderr, stdin, stdout, BufRead, Error, Write};
@@ -295,6 +296,7 @@ impl Interpreter {
                     Token::Ampersand(_line) => Ok(self.interp_stringify(operator, &right_obj)?),
                     Token::Bang(_line) => Ok(RuntimeObject::Bool(!is_truthy(&right_obj))),
                     Token::Slash(_line) => self.interp_sqrt(operator, &right_obj),
+                    Token::Dollar(_line) => self.interp_env(operator, &right_obj),
                     _ => Err(RuntimeException::RuntimeError(format!("Expected unary operator, found: {} ", operator)))
                 }
             }
@@ -633,6 +635,28 @@ impl Interpreter {
             RuntimeObject::Integer(i) => Ok(RuntimeObject::Float(f64::from(i).sqrt())),
             RuntimeObject::Float(f) => Ok(RuntimeObject::Float(f.sqrt())),
             _ => Err(RuntimeException::RuntimeError(format!("Operand to {} not numeric type", operator)))
+        }
+    }
+
+    fn interp_env(&self, operator: &Token, right: &RuntimeObject) -> Result<RuntimeObject, RuntimeException> {
+        match *right {
+            RuntimeObject::String(ref s) => {
+                match env::var(s) {
+                    Err(_) => Ok(RuntimeObject::Nil),
+                    Ok(val) => Ok(RuntimeObject::String(val))
+                }
+            }
+            RuntimeObject::Integer(i) => {
+                if i < 0 {
+                    return Err(RuntimeException::RuntimeError(
+                        format!("Operand to {} cannot be negative integer", operator)));
+                }
+                match env::args().nth(i as usize) {
+                    Some(arg) => Ok(RuntimeObject::String(arg)),
+                    None => Ok(RuntimeObject::Nil)
+                }
+            }
+            _ => Err(RuntimeException::RuntimeError(format!("Operand to {} invalid type", operator)))
         }
     }
 
