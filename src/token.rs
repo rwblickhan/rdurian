@@ -36,6 +36,10 @@ pub enum Token {
     True(Line),
     False(Line),
 
+    // Subprocess-related tokens
+    Backtick { line: Line, name: String },
+    Pipe(Line),
+
     // State-related tokens
     Def(Line),
     Let(Line),
@@ -91,6 +95,8 @@ impl fmt::Display for Token {
             Token::Float { ref line, ref literal } => write!(f, "{} (line {})", literal, line),
             Token::True(line) => write!(f, "True (line {})", line),
             Token::False(line) => write!(f, "False (line {})", line),
+            Token::Backtick { line, name } => write!(f, "`{} (line {})", name, line),
+            Token::Pipe(line) => write!(f, "| (line {})", line),
             Token::Def(line) => write!(f, "def (line {})", line),
             Token::Let(line) => write!(f, "let (line {})", line),
             Token::Equal(line) => write!(f, "= (line {})", line),

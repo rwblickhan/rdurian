@@ -29,6 +29,7 @@ impl<'a> Lexer<'a> {
             '%' => Some(Token::Modulo(self.curr_line)),
             '^' => Some(Token::Caret(self.curr_line)),
             '$' => Some(Token::Dollar(self.curr_line)),
+            '|' => Some(Token::Pipe(self.curr_line)),
             '=' => {
                 match self.iter.next() {
                     None => Some(Token::Equal(self.curr_line)),
@@ -104,6 +105,14 @@ impl<'a> Lexer<'a> {
                 }
             }
             '"' => self.tokenize_string_literal(),
+            '`' => {
+                let mut lit = String::new();
+                self.scan_into_buffer(&mut lit);
+                Some(Token::Backtick {
+                    line: self.curr_line,
+                    name: lit,
+                })
+            }
             _ => {
                 let mut lit = String::new();
                 lit.push(c);
@@ -578,6 +587,19 @@ mod tests {
     fn test_lex_ident() {
         let mut lexer = Lexer::new(&"a_ident10");
         assert_eq!(Token::Identifier { line: 0, literal: "a_ident10".to_string() },
+                   lexer.next().unwrap());
+    }
+
+    #[test]
+    fn test_lex_single_pipe() {
+        let mut lexer = Lexer::new(&"|");
+        assert_eq!(Token::Pipe(0), lexer.next().unwrap());
+    }
+
+    #[test]
+    fn test_lex_backtick() {
+        let mut lexer = Lexer::new(&"`man");
+        assert_eq!(Token::Backtick { line: 0, name: "man".to_string() },
                    lexer.next().unwrap());
     }
 
