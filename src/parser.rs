@@ -559,6 +559,7 @@ impl<'a> Parser<'a> {
         };
 
         match curr_token {
+            Token::Backtick { line: _, name: _ } => self.parse_pipeline(curr_token),
             Token::Plus(_line) => {
                 match self.parse_unary_expr()? {
                     None => Err(SyntaxError::new("Plus unary expression missing operand.".to_string(),
@@ -641,6 +642,79 @@ impl<'a> Parser<'a> {
                 }
             }
             _ => Err(SyntaxError::new("Unexpected token.".to_string(), Some(curr_token)))
+        }
+    }
+
+    fn parse_pipeline(&mut self, command: Token) -> Result<Option<Expr>, SyntaxError> {
+        let first_command = self.parse_exec_command(command)?;
+
+        if let Some(token) = self.get_next_token(true)? {
+            match token {
+                Token::Pipe(_line) => {
+                    let mut commands = Vec::new();
+                    commands.push(Box::new(first_command));
+                    let mut next_token = self.get_next_token(false)?.unwrap();
+                    commands.push(Box::new(self.parse_exec_command(next_token)?));
+                    while let Some(token) = self.get_next_token(true)? {
+                        if let Token::Pipe(_line) = token {
+                            next_token = self.get_next_token(false)?.unwrap();
+                            commands.push(Box::new(self.parse_exec_command(next_token)?));
+                        } else {
+                            self.unused_lookahead = Some(token);
+                            return Ok(Some(Expr::Pipeline { commands }));
+                        }
+                    }
+                    return Ok(Some(Expr::Pipeline { commands }));
+                }
+                _ => {
+                    self.unused_lookahead = Some(token);
+                    return Ok(Some(first_command));
+                }
+            }
+        }
+        Ok(Some(first_command))
+    }
+
+    fn parse_exec_command(&mut self, command: Token) -> Result<Expr, SyntaxError> {
+        match command {
+            Token::Backtick { line: _, ref name } => {
+                if let Some(token) = self.get_next_token(true)? {
+                    match token {
+                        Token::LeftParen(_line) => {
+                            let mut args = Vec::new();
+                            while let Some(curr_token) = self.get_next_token(false)? {
+                                match curr_token {
+                                    Token::Comma(_line) => continue,
+                                    Token::RightParen(_line) => return Ok(Expr::Exec {
+                                        command: name.clone(),
+                                        args: Some(args),
+                                    }),
+                                    _ => {
+                                        self.unused_lookahead = Some(curr_token.clone());
+                                        let arg = match self.parse_expr()? {
+                                            None => return Err(SyntaxError::new(
+                                                "Unterminated exec command parameter list.".to_string(),
+                                                Some(curr_token))),
+                                            Some(expr) => expr
+                                        };
+                                        args.push(Box::new(arg))
+                                    }
+                                }
+                            }
+                            Err(SyntaxError::new("Unterminated exec command parameter list.".to_string(),
+                                                 None))
+                        }
+                        _ => {
+                            self.unused_lookahead = Some(token);
+                            Ok(Expr::Exec { command: name.clone(), args: None })
+                        }
+                    }
+                } else {
+                    Ok(Expr::Exec { command: name.clone(), args: None })
+                }
+            }
+            _ => return Err(SyntaxError::new("Expected shell-out command".to_string(),
+                                             Some(command)))
         }
     }
 
@@ -1888,6 +1962,70 @@ mod tests {
                         }
                         _ => panic!()
                     }
+                }
+                _ => panic!()
+            }
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_parse_pipeline() {
+        let mut parser = Parser::new(Lexer::new("`ls(\"-l\") | `grep(\"key\") | `less\n"));
+        match parser.next().unwrap() {
+            Stmt::Expr { expr } => match *expr {
+                Expr::Pipeline { ref commands } => {
+                    let mut iter = commands.iter();
+                    let first_command = iter.next().unwrap();
+                    match **first_command {
+                        Expr::Exec { ref command, ref args } => {
+                            assert_eq!(*command, "ls");
+                            match *args {
+                                None => panic!(),
+                                Some(ref args) => {
+                                    let arg = args.iter().next().unwrap();
+                                    match **arg {
+                                        Expr::Literal { ref value } => assert_eq!(value,
+                                                                                  &Token::String {
+                                                                                      line: 0,
+                                                                                      literal: "-l".to_string(),
+                                                                                  }),
+                                        _ => panic!()
+                                    }
+                                }
+                            };
+                        }
+                        _ => panic!()
+                    };
+                    let second_command = iter.next().unwrap();
+                    match **second_command {
+                        Expr::Exec { ref command, ref args } => {
+                            assert_eq!(*command, "grep");
+                            match *args {
+                                None => panic!(),
+                                Some(ref args) => {
+                                    let arg = args.iter().next().unwrap();
+                                    match **arg {
+                                        Expr::Literal { ref value } => assert_eq!(value,
+                                                                                  &Token::String {
+                                                                                      line: 0,
+                                                                                      literal: "key".to_string(),
+                                                                                  }),
+                                        _ => panic!()
+                                    }
+                                }
+                            };
+                        }
+                        _ => panic!()
+                    };
+                    let third_command = iter.next().unwrap();
+                    match **third_command {
+                        Expr::Exec { ref command, ref args } => {
+                            assert_eq!(*command, "less");
+                            assert_eq!(*args, None);
+                        }
+                        _ => panic!()
+                    };
                 }
                 _ => panic!()
             }
