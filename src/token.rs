@@ -19,6 +19,7 @@ pub enum Token {
     Slash(Line),
     Modulo(Line),
     Caret(Line),
+    Dollar(Line),
 
     // Comparison operators
     BangEqual(Line),
@@ -78,6 +79,7 @@ impl fmt::Display for Token {
             Token::Slash(line) => write!(f, "/ (line {})", line),
             Token::Modulo(line) => write!(f, "% (line {})", line),
             Token::Caret(line) => write!(f, "^ (line {})", line),
+            Token::Dollar(line) => write!(f, "$ (line {})", line),
             Token::BangEqual(line) => write!(f, "!= (line {})", line),
             Token::EqualEqual(line) => write!(f, "== (line {})", line),
             Token::Greater(line) => write!(f, "> (line {})", line),
