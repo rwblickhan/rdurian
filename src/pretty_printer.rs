@@ -73,5 +73,28 @@ pub fn pretty_print_expr(expr: &Expr) -> String {
             write!(&mut buffer, ")").unwrap();
             buffer
         }
+        Expr::Exec { ref command, ref args } => {
+            let mut buffer = String::new();
+            write!(&mut buffer, "(shell out to {}", command).unwrap();
+            if let Some(args) = args {
+                write!(&mut buffer, " with args ").unwrap();
+                let mut iter = args.iter();
+                for expr in iter {
+                    write!(&mut buffer, "{}, ", pretty_print_expr(expr)).unwrap();
+                }
+            }
+            write!(&mut buffer, ")").unwrap();
+            buffer
+        }
+        Expr::Pipeline { ref commands } => {
+            let mut buffer = String::new();
+            write!(&mut buffer, "(").unwrap();
+            let mut iter = commands.iter();
+            for command in iter {
+                write!(&mut buffer, "{} | ", pretty_print_expr(command)).unwrap();
+            }
+            write!(&mut buffer, ")").unwrap();
+            buffer
+        }
     }
 }
