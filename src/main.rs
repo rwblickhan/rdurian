@@ -97,7 +97,7 @@ fn exec_input(verbose: bool, pretty_print: bool, input: &str) {
         if interpreter.had_error() {
             exit_code = 1;
             if verbose {
-                println!("{}", out.unwrap_or("Unknown runtime error".to_string()));
+                println!("{}", out.unwrap_or_else(|| "Unknown runtime error".to_string()));
             }
             break;
         }

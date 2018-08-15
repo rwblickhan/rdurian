@@ -13,29 +13,29 @@ pub fn pretty_print_stmt(stmt: &Stmt) -> String {
             write!(&mut buffer, "}}").unwrap();
             buffer
         }
-        Stmt::If { token: _, ref cond, ref true_body, ref false_body } => format!("if {} do {} else do {};",
-                                                                                  pretty_print_expr(&cond),
-                                                                                  pretty_print_stmt(&true_body),
-                                                                                  match *false_body {
-                                                                                      None => "nothing;".to_string(),
-                                                                                      Some(ref stmt) => pretty_print_stmt(stmt)
-                                                                                  }),
-        Stmt::While { token: _, ref cond, ref body } => format!("while {} do {};",
-                                                                pretty_print_expr(cond),
-                                                                pretty_print_stmt(body)),
+        Stmt::If { ref cond, ref true_body, ref false_body, .. } => format!("if {} do {} else do {};",
+                                                                            pretty_print_expr(&cond),
+                                                                            pretty_print_stmt(&true_body),
+                                                                            match *false_body {
+                                                                                None => "nothing;".to_string(),
+                                                                                Some(ref stmt) => pretty_print_stmt(stmt)
+                                                                            }),
+        Stmt::While { ref cond, ref body, .. } => format!("while {} do {};",
+                                                          pretty_print_expr(cond),
+                                                          pretty_print_stmt(body)),
         Stmt::Next(_) => "next;".to_string(),
         Stmt::Break(_) => "break;".to_string(),
-        Stmt::Let { token: _, ref ident, ref expr } => format!("let {} be {};",
-                                                               pretty_print_expr(ident),
-                                                               pretty_print_expr(expr)),
+        Stmt::Let { ref ident, ref expr, .. } => format!("let {} be {};",
+                                                         pretty_print_expr(ident),
+                                                         pretty_print_expr(expr)),
         Stmt::Assign { ref ident, ref expr } => format!("assign {} to {};",
                                                         pretty_print_expr(expr),
                                                         pretty_print_expr(ident)),
-        Stmt::Print { token: _, ref expr } => format!("print {};", pretty_print_expr(expr)),
-        Stmt::Err { token: _, ref expr } => format!("err {};", pretty_print_expr(expr)),
-        Stmt::Scan { token: _, ref ident } => format!("scan {};", pretty_print_expr(ident)),
-        Stmt::Return { token: _, ref expr } => format!("return {};", pretty_print_expr(expr)),
-        Stmt::FnDecl { token: _, ref ident, ref params, ref body } => {
+        Stmt::Print { ref expr, .. } => format!("print {};", pretty_print_expr(expr)),
+        Stmt::Err { ref expr, .. } => format!("err {};", pretty_print_expr(expr)),
+        Stmt::Scan { ref ident, .. } => format!("scan {};", pretty_print_expr(ident)),
+        Stmt::Return { ref expr, .. } => format!("return {};", pretty_print_expr(expr)),
+        Stmt::FnDecl { ref ident, ref params, ref body, .. } => {
             let mut buffer = String::new();
             write!(&mut buffer, "declare function {} with params ",
                    pretty_print_expr(ident)).unwrap();
