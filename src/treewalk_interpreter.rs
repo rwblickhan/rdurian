@@ -737,6 +737,10 @@ impl Interpreter {
                                 }
                             )
                         }
+                        if command.eq(&"cd".to_string()) {
+                            // TODO better error handling
+                            env::set_current_dir(out_args_string.first().unwrap())?;
+                        }
                         Ok(subprocess::Exec::cmd(command).args(&out_args_string))
                     }
                 }
