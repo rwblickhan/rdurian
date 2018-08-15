@@ -14,6 +14,10 @@ fn main() {
         .version("0.1")
         .author("R.W. Blickhan <rwblickhan@gmail.com>")
         .about("Rust implementation of Durian compiler")
+        .arg(Arg::with_name("verbose")
+            .help("Print verbose logs")
+            .short("v")
+            .long("verbose"))
         .arg(Arg::with_name("pp")
             .help("Pretty print Durian source while parsing")
             .short("p")
@@ -25,15 +29,16 @@ fn main() {
         .get_matches();
 
     let pretty_print = matches.is_present("pp");
-    if pretty_print {
+    let verbose = matches.is_present("verbose");
+    if pretty_print && verbose {
         println!("Pretty printing enabled");
-    } else {
+    } else if verbose {
         println!("Pretty printing disabled")
     }
 
     match matches.value_of("input") {
         None => exec_repl(pretty_print),
-        Some(input) => exec_input(pretty_print, input)
+        Some(input) => exec_input(verbose, pretty_print, input)
     }
 }
 
@@ -71,8 +76,10 @@ fn exec_repl(pretty_print: bool) {
     std::process::exit(0);
 }
 
-fn exec_input(pretty_print: bool, input: &str) {
-    println!("Executing input from file {}", input);
+fn exec_input(verbose: bool, pretty_print: bool, input: &str) {
+    if verbose {
+        println!("Executing input from file {}", input);
+    }
     let source = fs::read_to_string(input)
         .unwrap_or_else(|_| panic!("Unable to read input file {}", input));
     let mut parser = Parser::new(Lexer::new(&source));
@@ -89,7 +96,9 @@ fn exec_input(pretty_print: bool, input: &str) {
         let out = interpreter.interp(&stmt);
         if interpreter.had_error() {
             exit_code = 1;
-            println!("{}", out.unwrap_or("Unknown runtime error".to_string()));
+            if verbose {
+                println!("{}", out.unwrap_or("Unknown runtime error".to_string()));
+            }
             break;
         }
     }
