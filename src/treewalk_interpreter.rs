@@ -169,7 +169,7 @@ impl Interpreter {
                 self.curr_scope = old_scope;
                 Ok(Some(buffer))
             }
-            Stmt::If { token: _, cond, true_body, false_body } => {
+            Stmt::If { cond, true_body, false_body, .. } => {
                 let cond_obj = self.interp_expr(cond)?;
                 if is_truthy(&cond_obj) {
                     return Ok(self.interp_stmt(true_body)?);
@@ -181,7 +181,7 @@ impl Interpreter {
                     }
                 }
             }
-            Stmt::While { token: _, cond, body } => {
+            Stmt::While { cond, body, .. } => {
                 let mut buffer = String::new();
                 while is_truthy(&self.interp_expr(cond)?) {
                     match self.interp_stmt(body) {
@@ -199,7 +199,7 @@ impl Interpreter {
             }
             Stmt::Next(_) => Err(RuntimeException::Next),
             Stmt::Break(_) => Err(RuntimeException::Break),
-            Stmt::Let { token: _, ident, expr } => {
+            Stmt::Let { ident, expr, .. } => {
                 let lval = self.interp_lval(ident)?;
                 let assign_val = self.interp_expr(expr)?;
                 let mut new_scope = Environment::new(Some(self.curr_scope.clone()));
@@ -213,21 +213,21 @@ impl Interpreter {
                 self.curr_scope.borrow_mut().assign(lval.clone(), &assign_val)?;
                 Ok(Some(format!("{} = {}", lval, assign_val)))
             }
-            Stmt::Print { token: _, expr } => {
+            Stmt::Print { expr, .. } => {
                 let expr_obj = self.interp_expr(expr)?;
                 let stdout = stdout();
                 let mut handle = stdout.lock();
                 handle.write_all(format!("{}\n", expr_obj).as_bytes())?;
                 Ok(None)
             }
-            Stmt::Err { token: _, expr } => {
+            Stmt::Err { expr, .. } => {
                 let expr_obj = self.interp_expr(expr)?;
                 let stderr = stderr();
                 let mut handle = stderr.lock();
                 handle.write_all(format!("{}\n", expr_obj).as_bytes())?;
                 Ok(None)
             }
-            Stmt::Scan { token: _, ident } => {
+            Stmt::Scan { ident, .. } => {
                 let lval = self.interp_lval(ident)?;
                 let stdin = stdin();
                 let mut handle = stdin.lock();
@@ -235,11 +235,11 @@ impl Interpreter {
                 self.curr_scope.borrow_mut().assign(lval, &RuntimeObject::String(input))?;
                 Ok(None)
             }
-            Stmt::Return { token: _, expr } => {
+            Stmt::Return { expr, .. } => {
                 let ret_val = self.interp_expr(expr)?;
                 Err(RuntimeException::Return(ret_val))
             }
-            Stmt::FnDecl { token: _, ident, params, body } => {
+            Stmt::FnDecl { ident, params, body, .. } => {
                 let ident_str = self.interp_lval(ident)?;
                 let mut param_strs = Vec::new();
                 for param in params {
@@ -360,7 +360,7 @@ impl Interpreter {
                     _ => Err(RuntimeException::RuntimeError("Expected a callable".to_string()))
                 }
             }
-            Expr::Exec { command: _, args: _ } => {
+            Expr::Exec { .. } => {
                 let exec = self.gen_exec(expr)?;
                 Ok(RuntimeObject::String(
                     exec
@@ -749,7 +749,7 @@ impl Interpreter {
         }
     }
 
-    fn gen_pipeline(&mut self, commands: &Vec<Box<Expr>>) -> Result<subprocess::Pipeline, RuntimeException> {
+    fn gen_pipeline(&mut self, commands: &[Box<Expr>]) -> Result<subprocess::Pipeline, RuntimeException> {
         let mut prepared_commands = Vec::new();
         for command in commands {
             prepared_commands.push(self.gen_exec(&command)?);

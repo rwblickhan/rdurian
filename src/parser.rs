@@ -559,7 +559,7 @@ impl<'a> Parser<'a> {
         };
 
         match curr_token {
-            Token::Backtick { line: _, name: _ } => self.parse_pipeline(curr_token),
+            Token::Backtick { .. } => self.parse_pipeline(curr_token),
             Token::Plus(_line) => {
                 match self.parse_unary_expr()? {
                     None => Err(SyntaxError::new("Plus unary expression missing operand.".to_string(),
@@ -677,7 +677,7 @@ impl<'a> Parser<'a> {
 
     fn parse_exec_command(&mut self, command: Token) -> Result<Expr, SyntaxError> {
         match command {
-            Token::Backtick { line: _, ref name } => {
+            Token::Backtick { ref name, .. } => {
                 if let Some(token) = self.get_next_token(true)? {
                     match token {
                         Token::LeftParen(_line) => {
@@ -713,8 +713,8 @@ impl<'a> Parser<'a> {
                     Ok(Expr::Exec { command: name.clone(), args: None })
                 }
             }
-            _ => return Err(SyntaxError::new("Expected shell-out command".to_string(),
-                                             Some(command)))
+            _ => Err(SyntaxError::new("Expected shell-out command".to_string(),
+                                      Some(command)))
         }
     }
 
