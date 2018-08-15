@@ -1,0 +1,3 @@
+#!/usr/local/bin/rdurian
+
+print "Hello World!"
