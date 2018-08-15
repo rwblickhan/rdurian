@@ -16,6 +16,22 @@ impl<'a> Lexer<'a> {
     fn match_token(&mut self, c: char) -> Option<Token> {
         match c {
             ' ' => self.next(),
+            '#' => {
+                while let Some(c) = self.iter.next() {
+                    match c {
+                        '\n' => {
+                            self.unused_lookahead = Some(c);
+                            break;
+                        }
+                        '\r' => {
+                            self.unused_lookahead = Some(c);
+                            break;
+                        }
+                        _ => ()
+                    }
+                }
+                self.next()
+            }
             ',' => Some(Token::Comma(self.curr_line)),
             '{' => Some(Token::LeftBrace(self.curr_line)),
             '}' => Some(Token::RightBrace(self.curr_line)),
