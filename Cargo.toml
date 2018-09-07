@@ -3,6 +3,14 @@ name = "rdurian"
 version = "0.1.0"
 authors = ["Russell Blickhan <rwblickhan@gmail.com>"]
 
+[[bin]]
+name = "rdurian"
+path = "src/main.rs"
+
+[[bin]]
+name = "disasm"
+path = "src/disassembler.rs"
+
 [dependencies]
 byteorder = "1"
 clap = "2.32.0"

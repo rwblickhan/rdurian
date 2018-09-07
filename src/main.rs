@@ -10,6 +10,7 @@ use rdurian::pretty_printer::*;
 use rdurian::treewalk_interpreter::Interpreter;
 use std::io::{stdin, stdout, Write};
 use std::fs;
+use std::fs::File;
 
 fn main() {
     let matches = App::new("rdurian")
@@ -104,7 +105,11 @@ fn exec_input(verbose: bool, pretty_print: bool, input: &str) {
     }
     let constants = code_gen.retrieve_constant_pool();
     let out = code_gen.retrieve_bytecode();
-    println!("Constants: {:?}", constants);
-    println!("Bytecode: {:?}", out);
+    // TODO determine the actual filename
+    let mut bytecode_file = File::create("tmp.durb").unwrap();
+    bytecode_file.write(&[0x2A]).unwrap();
+    bytecode_file.write(code_gen.retrieve_constant_pool_size().as_slice()).unwrap();
+    bytecode_file.write_all(constants.as_slice()).unwrap();
+    bytecode_file.write_all(out.as_slice()).unwrap();
     std::process::exit(exit_code);
 }
