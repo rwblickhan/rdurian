@@ -1,6 +1,9 @@
 pub mod ast;
+pub mod bytecode;
+pub mod code_generator;
 pub mod lexer;
 pub mod parser;
 pub mod pretty_printer;
 pub mod token;
 pub mod treewalk_interpreter;
+pub mod vm;
