@@ -63,5 +63,11 @@ impl CodeGenerator {
     pub fn retrieve_constant_pool(&self) -> Vec<Bytecode> {
         self.constant_pool.clone()
     }
+
+    pub fn retrieve_constant_pool_size(&self) -> Vec<Bytecode> {
+        let mut tmp = Vec::new();
+        tmp.write_u16::<BigEndian>(self.curr_constant_idx).unwrap();
+        tmp
+    }
 }
 
