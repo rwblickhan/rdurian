@@ -8,6 +8,7 @@ use rdurian::lexer::Lexer;
 use rdurian::parser::Parser;
 use rdurian::pretty_printer::*;
 use rdurian::treewalk_interpreter::Interpreter;
+use rdurian::vm::VM;
 use std::io::{stdin, stdout, Write};
 use std::fs;
 use std::fs::File;
@@ -111,5 +112,17 @@ fn exec_input(verbose: bool, pretty_print: bool, input: &str) {
     bytecode_file.write(code_gen.retrieve_constant_pool_size().as_slice()).unwrap();
     bytecode_file.write_all(constants.as_slice()).unwrap();
     bytecode_file.write_all(out.as_slice()).unwrap();
+    // TODO determine the actual filename
+    let mut vm = match VM::init("tmp.durb") {
+        Ok(vm) => vm,
+        Err(e) => {
+            println!("{:?}", e);
+            std::process::exit(1)
+        }, // TODO
+    };
+    vm.run();
+    if vm.had_error() {
+        exit_code = 1;
+    }
     std::process::exit(exit_code);
 }
