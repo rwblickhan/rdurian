@@ -2,6 +2,8 @@ extern crate rdurian;
 extern crate clap;
 
 use clap::{App, Arg};
+use rdurian::ast::Stmt;
+use rdurian::code_generator::CodeGenerator;
 use rdurian::lexer::Lexer;
 use rdurian::parser::Parser;
 use rdurian::pretty_printer::*;
@@ -83,8 +85,8 @@ fn exec_input(verbose: bool, pretty_print: bool, input: &str) {
     let source = fs::read_to_string(input)
         .unwrap_or_else(|_| panic!("Unable to read input file {}", input));
     let mut parser = Parser::new(Lexer::new(&source));
-    let mut interpreter = Interpreter::default();
     let mut exit_code = 0;
+    let mut stmts: Vec<Stmt> = Vec::new();
     while let Some(stmt) = parser.next() {
         if parser.had_error() {
             exit_code = 1;
@@ -93,14 +95,16 @@ fn exec_input(verbose: bool, pretty_print: bool, input: &str) {
         if pretty_print {
             println!("{}", pretty_print_stmt(&stmt));
         }
-        let out = interpreter.interp(&stmt);
-        if interpreter.had_error() {
-            exit_code = 1;
-            if verbose {
-                println!("{}", out.unwrap_or_else(|| "Unknown runtime error".to_string()));
-            }
-            break;
-        }
+        stmts.push(stmt);
     }
+    let mut code_gen = CodeGenerator::default();
+    let mut iter = stmts.iter();
+    while let Some(stmt) = iter.next() {
+        code_gen.gen_stmt_bytecode(stmt);
+    }
+    let constants = code_gen.retrieve_constant_pool();
+    let out = code_gen.retrieve_bytecode();
+    println!("Constants: {:?}", constants);
+    println!("Bytecode: {:?}", out);
     std::process::exit(exit_code);
 }
