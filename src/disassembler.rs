@@ -4,7 +4,7 @@ extern crate clap;
 
 use byteorder::{BigEndian, ReadBytesExt};
 use clap::{App, Arg};
-use rdurian::bytecode::{ConstantPoolIdx, Opcode, Tag};
+use rdurian::bytecode::{Opcode, Tag};
 use std::collections::VecDeque;
 use std::fs;
 use std::io::Cursor;
