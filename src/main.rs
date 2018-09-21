@@ -102,7 +102,7 @@ fn exec_input(verbose: bool, pretty_print: bool, input: &str) {
     let mut code_gen = CodeGenerator::default();
     let mut iter = stmts.iter();
     while let Some(stmt) = iter.next() {
-        code_gen.gen_stmt_bytecode(stmt);
+        code_gen.emit(stmt);
     }
     let constants = code_gen.retrieve_constant_pool();
     let out = code_gen.retrieve_bytecode();
@@ -118,7 +118,7 @@ fn exec_input(verbose: bool, pretty_print: bool, input: &str) {
         Err(e) => {
             println!("{:?}", e);
             std::process::exit(1)
-        }, // TODO
+        } // TODO
     };
     vm.run();
     if vm.had_error() {

@@ -14,34 +14,50 @@ pub struct CodeGenerator {
 }
 
 impl CodeGenerator {
-    pub fn gen_stmt_bytecode(&mut self, stmt: &Stmt) {
-        match stmt {
-            Stmt::Expr { expr } => {
-                self.gen_expr_bytecode(expr);
-                self.output_bytecode.push(Opcode::Pop as u8);
-            }
-            _ => {} // TODO
-        }
+    pub fn emit(&mut self, stmt: &Stmt) {
+        let mut out = self.emit_stmt_bytecode(stmt);
+        self.output_bytecode.append(&mut out);
     }
 
-    fn gen_expr_bytecode(&mut self, expr: &Expr) {
+    fn emit_stmt_bytecode(&mut self, stmt: &Stmt) -> Vec<Bytecode> {
+        let mut out = Vec::new();
+        match stmt {
+            Stmt::Print { expr, .. } => {
+                out.append(&mut self.emit_expr_bytecode(expr));
+                out.push(Opcode::Print as u8);
+            }
+            Stmt::Err { expr, .. } => {
+                out.append(&mut self.emit_expr_bytecode(expr));
+                out.push(Opcode::Err as u8);
+            }
+            Stmt::Expr { expr } => {
+                out.append(&mut self.emit_expr_bytecode(expr));
+                out.push(Opcode::Pop as u8);
+            }
+            _ => {} // TODO
+        };
+        out
+    }
+
+    fn emit_expr_bytecode(&mut self, expr: &Expr) -> Vec<Bytecode> {
+        let mut out = Vec::new();
         match expr {
             Expr::Binary { left, operator, right } => {
-                self.gen_expr_bytecode(left);
-                self.gen_expr_bytecode(right);
+                out.append(&mut self.emit_expr_bytecode(left));
+                out.append(&mut self.emit_expr_bytecode(right));
                 match operator {
-                    Token::Plus(_) => self.output_bytecode.push(Opcode::Add as u8),
-                    Token::Minus(_) => self.output_bytecode.push(Opcode::Sub as u8),
+                    Token::Plus(_) => out.push(Opcode::Add as u8),
+                    Token::Minus(_) => out.push(Opcode::Sub as u8),
                     _ => {} // TODO
                 }
             }
             Expr::Literal { value } => {
                 match value {
                     Token::Integer { literal, .. } => {
-                        self.output_bytecode.push(Opcode::Constant as u8);
+                        out.push(Opcode::Constant as u8);
                         let mut idx = Vec::new();
                         idx.write_u16::<BigEndian>(self.curr_constant_idx).unwrap();
-                        self.output_bytecode.append(&mut idx);
+                        out.append(&mut idx);
                         let mut lit_as_bytes: Vec<u8> = Vec::new();
                         lit_as_bytes.write_i32::<BigEndian>(*literal).unwrap();
                         self.constant_pool.push(Tag::Integer as u8);
@@ -52,7 +68,8 @@ impl CodeGenerator {
                 }
             }
             _ => {} // TODO
-        }
+        };
+        out
     }
 
     pub fn retrieve_bytecode(&mut self) -> Vec<Bytecode> {
