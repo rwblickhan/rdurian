@@ -3,8 +3,9 @@ extern crate byteorder;
 use self::byteorder::{BigEndian, ReadBytesExt};
 use bytecode::{Bytecode, ConstantPoolIdx, Opcode, Tag};
 use std::collections::VecDeque;
+use std::fmt;
 use std::fs;
-use std::io::{Cursor, Error};
+use std::io::{stderr, stdout, Cursor, Error, Write};
 
 #[derive(Clone, PartialEq)]
 enum RuntimeObject {
@@ -12,6 +13,21 @@ enum RuntimeObject {
     Float(f64),
     Bool(bool),
     Nil,
+}
+
+impl fmt::Display for RuntimeObject {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            RuntimeObject::Integer(i) => write!(f, "{}", i),
+            RuntimeObject::Float(fl) => write!(f, "{}", fl),
+            RuntimeObject::Bool(b) => if *b {
+                write!(f, "True")
+            } else {
+                write!(f, "False")
+            },
+            RuntimeObject::Nil => write!(f, "nil")
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -94,9 +110,19 @@ impl VM {
                 Opcode::Pop => self.pop(),
                 Opcode::Constant => match self.constant() {
                     _ => () // TODO
-                },
-                Opcode::Add => {} // TODO
-                Opcode::Sub => {} // TODO
+                }
+                Opcode::Add => match self.add() {
+                    _ => () // TODO
+                }
+                Opcode::Sub => match self.sub() {
+                    _ => () // TODO
+                }
+                Opcode::Print => match self.print() {
+                    _ => () // TODO
+                }
+                Opcode::Err => match self.err() {
+                    _ => () // TODO
+                }
             };
         }
     }
@@ -192,6 +218,30 @@ impl VM {
             }
             _ => Err(RuntimeError::InvalidOperand("Left operand to addition not numeric type".to_string())),
         }
+    }
+
+    fn print(&mut self) -> Result<(), RuntimeError> {
+        self.pc = self.pc + 1;
+        let obj = match self.stack.pop() {
+            Some(val) => val,
+            None => return Err(RuntimeError::StackError),
+        };
+        let stdout = stdout();
+        let mut handle = stdout.lock();
+        handle.write_all(format!("{}\n", obj).as_bytes())?;
+        Ok(())
+    }
+
+    fn err(&mut self) -> Result<(), RuntimeError> {
+        self.pc = self.pc + 1;
+        let obj = match self.stack.pop() {
+            Some(val) => val,
+            None => return Err(RuntimeError::StackError),
+        };
+        let stderr = stderr();
+        let mut handle = stderr.lock();
+        handle.write_all(format!("{}\n", obj).as_bytes())?;
+        Ok(())
     }
 
     pub fn had_error(&self) -> bool {

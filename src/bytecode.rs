@@ -11,6 +11,10 @@ pub enum Opcode {
     Add = 0x10,
     // pop the top two objects on the stack, subtract them (if possible), and push the result onto the stack
     Sub = 0x11,
+    // pop the top object from the stack, output it's string rep to stdout
+    Print = 0xF0,
+    // pop the top object from the stack, output it's string rep to stderr
+    Err = 0xF1,
     Halt = 0xFF,
 }
 
@@ -22,6 +26,8 @@ impl From<u8> for Opcode {
             0x02 => Opcode::Constant,
             0x10 => Opcode::Add,
             0x11 => Opcode::Sub,
+            0xF0 => Opcode::Print,
+            0xF1 => Opcode::Err,
             0xFF => Opcode::Halt,
             _ => Opcode::Nop,
         }

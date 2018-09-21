@@ -79,6 +79,8 @@ fn disassemble(input: Vec<u8>) {
             }
             Opcode::Add => println!("ADD"),
             Opcode::Sub => println!("SUB"),
+            Opcode::Print => println!("PRINT"),
+            Opcode::Err => println!("ERR"),
             Opcode::Halt => println!("HALT")
         }
     }
