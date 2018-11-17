@@ -6,7 +6,15 @@ addons:
     packages:
       - libssl-dev
 cache: cargo
+rust:
+    - stable
+    - nightly
+before_cache: |
+    if [[ "$TRAVIS_RUST_VERSION" == nightly ]]; then
+        RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install cargo-tarpaulin
+    fi
 after_success: |
-  RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install cargo-tarpaulin &&
-  cargo +nightly tarpaulin --out Xml &&
-  bash <(curl -s https://codecov.io/bash)
+    if [[ "$TRAVIS_RUST_VERSION" == nightly ]]; then
+        cargo tarpaulin --out Xml
+        bash <(curl -s https://codecov.io/bash)
+    fi
