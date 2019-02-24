@@ -5,7 +5,7 @@ use bytecode::{Bytecode, ConstantPoolIdx, Opcode, Tag};
 use std::collections::VecDeque;
 use std::fmt;
 use std::fs;
-use std::io::{stderr, stdout, Cursor, Error, Write};
+use std::io::{Cursor, Error, Write};
 
 #[derive(Clone, PartialEq)]
 enum RuntimeObject {
@@ -58,17 +58,19 @@ impl From<Error> for RuntimeError {
 }
 
 #[derive(Default)]
-pub struct VM {
+pub struct VM<Stdout: Write, Stderr: Write> {
     had_exec_error: bool,
     constant_pool_size: ConstantPoolIdx,
     constant_pool: Vec<Bytecode>,
     instructions: Vec<Bytecode>,
     pc: usize,
     stack: Vec<RuntimeObject>,
+    stdout: Stdout,
+    stderr: Stderr,
 }
 
-impl VM {
-    pub fn init(input: &str) -> Result<VM, StartupError> {
+impl<Stdout: Write, Stderr: Write> VM<Stdout, Stderr> {
+    pub fn init(input: &str, stdout: Stdout, stderr: Stderr) -> Result<VM<Stdout, Stderr>, StartupError> {
         let mut input_queue = VecDeque::from(fs::read(input)?);
         let magic_number = input_queue.pop_front();
         match magic_number {
@@ -99,6 +101,8 @@ impl VM {
             instructions,
             pc: 0,
             stack: Vec::with_capacity(2 ^ 16),
+            stdout,
+            stderr,
         })
     }
 
@@ -226,9 +230,7 @@ impl VM {
             Some(val) => val,
             None => return Err(RuntimeError::StackError),
         };
-        let stdout = stdout();
-        let mut handle = stdout.lock();
-        handle.write_all(format!("{}\n", obj).as_bytes())?;
+        self.stdout.write_all(format!("{}\n", obj).as_bytes())?;
         Ok(())
     }
 
@@ -238,9 +240,7 @@ impl VM {
             Some(val) => val,
             None => return Err(RuntimeError::StackError),
         };
-        let stderr = stderr();
-        let mut handle = stderr.lock();
-        handle.write_all(format!("{}\n", obj).as_bytes())?;
+        self.stderr.write_all(format!("{}\n", obj).as_bytes())?;
         Ok(())
     }
 

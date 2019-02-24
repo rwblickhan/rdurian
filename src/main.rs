@@ -9,7 +9,7 @@ use rdurian::parser::Parser;
 use rdurian::pretty_printer::*;
 use rdurian::treewalk_interpreter::Interpreter;
 use rdurian::vm::VM;
-use std::io::{stdin, stdout, Write};
+use std::io::{stdin, stdout, stderr, Write};
 use std::fs;
 use std::fs::File;
 
@@ -55,7 +55,7 @@ fn exec_repl(pretty_print: bool) {
     loop {
         let mut buffer = String::new();
         stdin().read_line(&mut buffer).unwrap();
-        if buffer.eq(&"fin\n") {
+        if buffer.eq(&"fin\n".to_string()) {
             println!("Goodbye!");
             break;
         }
@@ -87,17 +87,18 @@ fn exec_input(verbose: bool, pretty_print: bool, input: &str) {
     let source = fs::read_to_string(input)
         .unwrap_or_else(|_| panic!("Unable to read input file {}", input));
     let mut parser = Parser::new(Lexer::new(&source));
-    let mut exit_code = 0;
     let mut stmts: Vec<Stmt> = Vec::new();
     while let Some(stmt) = parser.next() {
         if parser.had_error() {
-            exit_code = 1;
             continue;
         }
         if pretty_print {
             println!("{}", pretty_print_stmt(&stmt));
         }
         stmts.push(stmt);
+    }
+    if parser.had_error() {
+        std::process::exit(1);
     }
     let mut code_gen = CodeGenerator::default();
     let mut iter = stmts.iter();
@@ -113,7 +114,11 @@ fn exec_input(verbose: bool, pretty_print: bool, input: &str) {
     bytecode_file.write_all(constants.as_slice()).unwrap();
     bytecode_file.write_all(out.as_slice()).unwrap();
     // TODO determine the actual filename
-    let mut vm = match VM::init("tmp.durb") {
+    let stdout = stdout();
+    let stderr = stderr();
+    let mut vm = match VM::init("tmp.durb",
+                                stdout.lock(),
+                                stderr.lock()) {
         Ok(vm) => vm,
         Err(e) => {
             println!("{:?}", e);
@@ -122,7 +127,7 @@ fn exec_input(verbose: bool, pretty_print: bool, input: &str) {
     };
     vm.run();
     if vm.had_error() {
-        exit_code = 1;
+        std::process::exit(1);
     }
-    std::process::exit(exit_code);
+    std::process::exit(0);
 }
