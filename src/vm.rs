@@ -68,7 +68,8 @@ pub struct VM<'a, Stdout: Write, Stderr: Write> {
 }
 
 impl<'a, Stdout: Write, Stderr: Write> VM<'a, Stdout, Stderr> {
-    pub fn init(input: Vec<u8>, stdout: &'a mut Stdout,
+    pub fn init(input: Vec<u8>,
+                stdout: &'a mut Stdout,
                 stderr: &'a mut Stderr) -> Result<VM<'a, Stdout, Stderr>, StartupError> {
         let mut input_queue = VecDeque::from(input);
         let magic_number = input_queue.pop_front();

@@ -11,9 +11,9 @@ pub enum Opcode {
     Add = 0x10,
     // pop the top two objects on the stack, subtract them (if possible), and push the result onto the stack
     Sub = 0x11,
-    // pop the top object from the stack, output it's string rep to stdout
+    // pop the top object from the stack, output its string repr to stdout
     Print = 0xF0,
-    // pop the top object from the stack, output it's string rep to stderr
+    // pop the top object from the stack, output its string repr to stderr
     Err = 0xF1,
     Halt = 0xFF,
 }
