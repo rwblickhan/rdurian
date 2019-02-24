@@ -4,7 +4,6 @@ use self::byteorder::{BigEndian, ReadBytesExt};
 use bytecode::{Bytecode, ConstantPoolIdx, Opcode, Tag};
 use std::collections::VecDeque;
 use std::fmt;
-use std::fs;
 use std::io::{Cursor, Error, Write};
 
 #[derive(Clone, PartialEq)]
@@ -70,8 +69,8 @@ pub struct VM<Stdout: Write, Stderr: Write> {
 }
 
 impl<Stdout: Write, Stderr: Write> VM<Stdout, Stderr> {
-    pub fn init(input: &str, stdout: Stdout, stderr: Stderr) -> Result<VM<Stdout, Stderr>, StartupError> {
-        let mut input_queue = VecDeque::from(fs::read(input)?);
+    pub fn init(input: Vec<u8>, stdout: Stdout, stderr: Stderr) -> Result<VM<Stdout, Stderr>, StartupError> {
+        let mut input_queue = VecDeque::from(input);
         let magic_number = input_queue.pop_front();
         match magic_number {
             Some(num) if num == 0x2A => (),
@@ -89,6 +88,7 @@ impl<Stdout: Write, Stderr: Write> VM<Stdout, Stderr> {
             }
             tmp
         }).read_u16::<BigEndian>()?;
+        // TODO assumes constant pool size is correct... should fix this
         let mut constant_pool = Vec::with_capacity(usize::from(constant_pool_size));
         for _i in 0..constant_pool_size {
             constant_pool.push(input_queue.pop_front().unwrap());
@@ -246,5 +246,95 @@ impl<Stdout: Write, Stderr: Write> VM<Stdout, Stderr> {
 
     pub fn had_error(&self) -> bool {
         self.had_exec_error
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{StartupError, VM};
+
+    #[test]
+    fn test_missing_magic_number() {
+        let input = Vec::new();
+        let stdout = Vec::new();
+        let stderr = Vec::new();
+        let err = VM::init(input, stdout, stderr);
+        match err {
+            Err(e) => {
+                match e {
+                    StartupError::MissingMagicNumber => {}
+                    _ => panic!()
+                }
+            }
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_invalid_magic_number() {
+        let invalid = 0x2B;
+        let input = vec!(invalid);
+        let stdout = Vec::new();
+        let stderr = Vec::new();
+        let err = VM::init(input, stdout, stderr);
+        match err {
+            Err(e) => {
+                match e {
+                    StartupError::InvalidMagicNumber(num) => {
+                        assert_eq!(num, invalid);
+                    }
+                    _ => panic!()
+                }
+            }
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_missing_constant_pool_size() {
+        let input = vec!(0x2A);
+        let stdout = Vec::new();
+        let stderr = Vec::new();
+        let err = VM::init(input, stdout, stderr);
+        match err {
+            Err(e) => {
+                match e {
+                    StartupError::InvalidConstantPoolSize => {}
+                    _ => panic!()
+                }
+            }
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_invalid_constant_pool_size() {
+        let input = vec!(0x2A, 0x00);
+        let stdout = Vec::new();
+        let stderr = Vec::new();
+        let err = VM::init(input, stdout, stderr);
+        match err {
+            Err(e) => {
+                match e {
+                    StartupError::InvalidConstantPoolSize => {}
+                    _ => panic!()
+                }
+            }
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn test_correct_vm_init() {
+        let input = vec!(0x2A, 0x00, 0x05, 0x01, 0x00, 0x00, 0x00, 0x00);
+        let stdout = Vec::new();
+        let stderr = Vec::new();
+        let err = VM::init(input, stdout, stderr);
+        match err {
+            Ok(vm) => {
+                assert!(!vm.had_error());
+            }
+            _ => panic!()
+        }
     }
 }

@@ -116,7 +116,8 @@ fn exec_input(verbose: bool, pretty_print: bool, input: &str) {
     // TODO determine the actual filename
     let stdout = stdout();
     let stderr = stderr();
-    let mut vm = match VM::init("tmp.durb",
+    let bytecode = fs::read("tmp.durb").unwrap();
+    let mut vm = match VM::init(bytecode,
                                 stdout.lock(),
                                 stderr.lock()) {
         Ok(vm) => vm,
