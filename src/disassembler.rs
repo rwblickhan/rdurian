@@ -7,7 +7,7 @@ use clap::{App, Arg};
 use rdurian::bytecode::{Opcode, Tag};
 use std::collections::VecDeque;
 use std::fs;
-use std::io::Cursor;
+use std::io::{Cursor, stdout, Write};
 
 fn main() {
     let matches = App::new("rdurian disassembler")
@@ -20,16 +20,18 @@ fn main() {
             .index(1))
         .get_matches();
 
+    let stdout = stdout();
     match matches.value_of("input") {
         None => panic!(),
-        Some(input) => disassemble(fs::read(input).unwrap()),
+        Some(input) => disassemble(fs::read(input).unwrap(),
+                                   &mut stdout.lock()),
     }
 }
 
-fn disassemble(input: Vec<u8>) {
+fn disassemble<W: Write>(input: Vec<u8>, mut write_buf: W) {
     let mut input_queue = VecDeque::from(input);
     let magic_number = input_queue.pop_front().unwrap();
-    println!("Magic number: {}", magic_number);
+    writeln!(&mut write_buf, "Magic number: {}", magic_number).unwrap();
     let constant_pool_size = Cursor::new({
         let mut tmp = Vec::new();
         for _i in 0..2 {
@@ -37,8 +39,8 @@ fn disassemble(input: Vec<u8>) {
         }
         tmp
     }).read_u16::<BigEndian>().unwrap();
-    println!("Constant pool size (bytes): {}", constant_pool_size);
-    print!("Constant pool:");
+    writeln!(&mut write_buf, "Constant pool size (bytes): {}", constant_pool_size).unwrap();
+    write!(&mut write_buf, "Constant pool:").unwrap();
     let mut constant_pool = VecDeque::new();
     for _i in 0..constant_pool_size {
         constant_pool.push_back(input_queue.pop_front().unwrap());
@@ -46,7 +48,7 @@ fn disassemble(input: Vec<u8>) {
     while let Some(byte) = constant_pool.pop_front() {
         let tag = Tag::from(byte);
         match tag {
-            Tag::Nil => print!("Nil "),
+            Tag::Nil => write!(&mut write_buf, "Nil ").unwrap(),
             Tag::Integer => {
                 let int_constant = Cursor::new({
                     let mut tmp = Vec::new();
@@ -55,18 +57,18 @@ fn disassemble(input: Vec<u8>) {
                     }
                     tmp
                 }).read_i32::<BigEndian>().unwrap();
-                print!(" {} ", int_constant);
+                write!(&mut write_buf, " {} ", int_constant).unwrap();
             }
             _ => {} // TODO
         }
     }
-    println!();
-    println!("Instructions: ");
+    writeln!(&mut write_buf).unwrap();
+    writeln!(&mut write_buf, "Instructions: ").unwrap();
     while let Some(byte) = input_queue.pop_front() {
         let opcode = Opcode::from(byte);
         match opcode {
-            Opcode::Nop => println!("NOP"),
-            Opcode::Pop => println!("POP"),
+            Opcode::Nop => writeln!(&mut write_buf, "NOP").unwrap(),
+            Opcode::Pop => writeln!(&mut write_buf, "POP").unwrap(),
             Opcode::Constant => {
                 let idx = Cursor::new({
                     let mut tmp = Vec::new();
@@ -75,13 +77,13 @@ fn disassemble(input: Vec<u8>) {
                     }
                     tmp
                 }).read_u16::<BigEndian>().unwrap();
-                println!("CONST {}", idx);
+                writeln!(&mut write_buf, "CONST {}", idx).unwrap();
             }
-            Opcode::Add => println!("ADD"),
-            Opcode::Sub => println!("SUB"),
-            Opcode::Print => println!("PRINT"),
-            Opcode::Err => println!("ERR"),
-            Opcode::Halt => println!("HALT")
+            Opcode::Add => writeln!(&mut write_buf, "ADD").unwrap(),
+            Opcode::Sub => writeln!(&mut write_buf, "SUB").unwrap(),
+            Opcode::Print => writeln!(&mut write_buf, "PRINT").unwrap(),
+            Opcode::Err => writeln!(&mut write_buf, "ERR").unwrap(),
+            Opcode::Halt => writeln!(&mut write_buf, "HALT").unwrap()
         }
     }
 }
