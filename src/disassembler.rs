@@ -101,16 +101,16 @@ mod tests {
         let mut expected_output = Vec::new();
         // Magic number
         input.push(0x2A);
-        writeln!(&mut expected_output, "Magic number: 42");
+        writeln!(&mut expected_output, "Magic number: 42").unwrap();
         // Constant pool size
         input.push(0x00);
         input.push(0x00);
-        writeln!(&mut expected_output, "Constant pool size (bytes): 0");
-        writeln!(&mut expected_output, "Constant pool:");
+        writeln!(&mut expected_output, "Constant pool size (bytes): 0").unwrap();
+        writeln!(&mut expected_output, "Constant pool:").unwrap();
         // NOP
         input.push(Opcode::Nop as u8);
-        writeln!(&mut expected_output, "Instructions:");
-        writeln!(&mut expected_output, "NOP");
+        writeln!(&mut expected_output, "Instructions:").unwrap();
+        writeln!(&mut expected_output, "NOP").unwrap();
         disassemble(input, &mut mock_stdout);
         assert_eq!(String::from_utf8(mock_stdout).unwrap(),
                    String::from_utf8(expected_output).unwrap());
@@ -123,16 +123,16 @@ mod tests {
         let mut expected_output = Vec::new();
         // Magic number
         input.push(0x2A);
-        writeln!(&mut expected_output, "Magic number: 42");
+        writeln!(&mut expected_output, "Magic number: 42").unwrap();
         // Constant pool size
         input.push(0x00);
         input.push(0x00);
-        writeln!(&mut expected_output, "Constant pool size (bytes): 0");
-        writeln!(&mut expected_output, "Constant pool:");
+        writeln!(&mut expected_output, "Constant pool size (bytes): 0").unwrap();
+        writeln!(&mut expected_output, "Constant pool:").unwrap();
         // NOP
         input.push(Opcode::Halt as u8);
-        writeln!(&mut expected_output, "Instructions:");
-        writeln!(&mut expected_output, "HALT");
+        writeln!(&mut expected_output, "Instructions:").unwrap();
+        writeln!(&mut expected_output, "HALT").unwrap();
         disassemble(input, &mut mock_stdout);
         assert_eq!(String::from_utf8(mock_stdout).unwrap(),
                    String::from_utf8(expected_output).unwrap());
@@ -145,16 +145,16 @@ mod tests {
         let mut expected_output = Vec::new();
         // Magic number
         input.push(0x2A);
-        writeln!(&mut expected_output, "Magic number: 42");
+        writeln!(&mut expected_output, "Magic number: 42").unwrap();
         // Constant pool size
         input.push(0x00);
         input.push(0x00);
-        writeln!(&mut expected_output, "Constant pool size (bytes): 0");
-        writeln!(&mut expected_output, "Constant pool:");
+        writeln!(&mut expected_output, "Constant pool size (bytes): 0").unwrap();
+        writeln!(&mut expected_output, "Constant pool:").unwrap();
         // NOP
         input.push(Opcode::Pop as u8);
-        writeln!(&mut expected_output, "Instructions:");
-        writeln!(&mut expected_output, "POP");
+        writeln!(&mut expected_output, "Instructions:").unwrap();
+        writeln!(&mut expected_output, "POP").unwrap();
         disassemble(input, &mut mock_stdout);
         assert_eq!(String::from_utf8(mock_stdout).unwrap(),
                    String::from_utf8(expected_output).unwrap());
@@ -167,16 +167,16 @@ mod tests {
         let mut expected_output = Vec::new();
         // Magic number
         input.push(0x2A);
-        writeln!(&mut expected_output, "Magic number: 42");
+        writeln!(&mut expected_output, "Magic number: 42").unwrap();
         // Constant pool size
         input.push(0x00);
         input.push(0x00);
-        writeln!(&mut expected_output, "Constant pool size (bytes): 0");
-        writeln!(&mut expected_output, "Constant pool:");
+        writeln!(&mut expected_output, "Constant pool size (bytes): 0").unwrap();
+        writeln!(&mut expected_output, "Constant pool:").unwrap();
         // NOP
         input.push(Opcode::Print as u8);
-        writeln!(&mut expected_output, "Instructions:");
-        writeln!(&mut expected_output, "PRINT");
+        writeln!(&mut expected_output, "Instructions:").unwrap();
+        writeln!(&mut expected_output, "PRINT").unwrap();
         disassemble(input, &mut mock_stdout);
         assert_eq!(String::from_utf8(mock_stdout).unwrap(),
                    String::from_utf8(expected_output).unwrap());
@@ -189,16 +189,16 @@ mod tests {
         let mut expected_output = Vec::new();
         // Magic number
         input.push(0x2A);
-        writeln!(&mut expected_output, "Magic number: 42");
+        writeln!(&mut expected_output, "Magic number: 42").unwrap();
         // Constant pool size
         input.push(0x00);
         input.push(0x00);
-        writeln!(&mut expected_output, "Constant pool size (bytes): 0");
-        writeln!(&mut expected_output, "Constant pool:");
+        writeln!(&mut expected_output, "Constant pool size (bytes): 0").unwrap();
+        writeln!(&mut expected_output, "Constant pool:").unwrap();
         // NOP
         input.push(Opcode::Err as u8);
-        writeln!(&mut expected_output, "Instructions:");
-        writeln!(&mut expected_output, "ERR");
+        writeln!(&mut expected_output, "Instructions:").unwrap();
+        writeln!(&mut expected_output, "ERR").unwrap();
         disassemble(input, &mut mock_stdout);
         assert_eq!(String::from_utf8(mock_stdout).unwrap(),
                    String::from_utf8(expected_output).unwrap());
@@ -211,16 +211,16 @@ mod tests {
         let mut expected_output = Vec::new();
         // Magic number
         input.push(0x2A);
-        writeln!(&mut expected_output, "Magic number: 42");
+        writeln!(&mut expected_output, "Magic number: 42").unwrap();
         // Constant pool size
         input.push(0x00);
         input.push(0x00);
-        writeln!(&mut expected_output, "Constant pool size (bytes): 0");
-        writeln!(&mut expected_output, "Constant pool:");
+        writeln!(&mut expected_output, "Constant pool size (bytes): 0").unwrap();
+        writeln!(&mut expected_output, "Constant pool:").unwrap();
         // NOP
         input.push(Opcode::Add as u8);
-        writeln!(&mut expected_output, "Instructions:");
-        writeln!(&mut expected_output, "ADD");
+        writeln!(&mut expected_output, "Instructions:").unwrap();
+        writeln!(&mut expected_output, "ADD").unwrap();
         disassemble(input, &mut mock_stdout);
         assert_eq!(String::from_utf8(mock_stdout).unwrap(),
                    String::from_utf8(expected_output).unwrap());
@@ -233,16 +233,16 @@ mod tests {
         let mut expected_output = Vec::new();
         // Magic number
         input.push(0x2A);
-        writeln!(&mut expected_output, "Magic number: 42");
+        writeln!(&mut expected_output, "Magic number: 42").unwrap();
         // Constant pool size
         input.push(0x00);
         input.push(0x00);
-        writeln!(&mut expected_output, "Constant pool size (bytes): 0");
-        writeln!(&mut expected_output, "Constant pool:");
+        writeln!(&mut expected_output, "Constant pool size (bytes): 0").unwrap();
+        writeln!(&mut expected_output, "Constant pool:").unwrap();
         // NOP
         input.push(Opcode::Sub as u8);
-        writeln!(&mut expected_output, "Instructions:");
-        writeln!(&mut expected_output, "SUB");
+        writeln!(&mut expected_output, "Instructions:").unwrap();
+        writeln!(&mut expected_output, "SUB").unwrap();
         disassemble(input, &mut mock_stdout);
         assert_eq!(String::from_utf8(mock_stdout).unwrap(),
                    String::from_utf8(expected_output).unwrap());
@@ -255,13 +255,13 @@ mod tests {
         let mut expected_output = Vec::new();
         // Magic number
         input.push(0x2A);
-        writeln!(&mut expected_output, "Magic number: 42");
+        writeln!(&mut expected_output, "Magic number: 42").unwrap();
         // Constant pool size
         input.push(0x00);
         input.push(0x0A);
-        writeln!(&mut expected_output, "Constant pool size (bytes): 10");
+        writeln!(&mut expected_output, "Constant pool size (bytes): 10").unwrap();
         // Constant pool
-        write!(&mut expected_output, "Constant pool:");
+        write!(&mut expected_output, "Constant pool:").unwrap();
         // Constant 2
         input.push(Tag::Integer as u8);
         input.push(0x00);
@@ -274,19 +274,19 @@ mod tests {
         input.push(0x00);
         input.push(0x00);
         input.push(0x01);
-        writeln!(&mut expected_output, " 2  1 ");
+        writeln!(&mut expected_output, " 2  1 ").unwrap();
         // Instructions
-        writeln!(&mut expected_output, "Instructions:");
+        writeln!(&mut expected_output, "Instructions:").unwrap();
         // First constant
         input.push(Opcode::Constant as u8);
         input.push(0x00);
         input.push(0x00);
-        writeln!(&mut expected_output, "CONST 0");
+        writeln!(&mut expected_output, "CONST 0").unwrap();
         // Second constant
         input.push(Opcode::Constant as u8);
         input.push(0x00);
         input.push(0x05);
-        writeln!(&mut expected_output, "CONST 5");
+        writeln!(&mut expected_output, "CONST 5").unwrap();
         disassemble(input, &mut mock_stdout);
         assert_eq!(String::from_utf8(mock_stdout).unwrap(),
                    String::from_utf8(expected_output).unwrap());
