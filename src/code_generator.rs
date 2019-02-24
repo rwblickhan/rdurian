@@ -218,5 +218,52 @@ mod tests {
         let pop_instr = Opcode::from(instructions.pop_front().unwrap());
         assert_eq!(pop_instr, Opcode::Pop);
     }
+
+    #[test]
+    fn test_compile_sub_two_int_literals() {
+        let mut code_gen = CodeGenerator::default();
+        let mut stmt = Stmt::Expr {
+            expr: Box::new(Expr::Binary {
+                left: Box::new(Expr::Literal {
+                    value: Token::Integer {
+                        line: 0,
+                        literal: 2,
+                    }
+                }),
+                operator: Token::Minus(0),
+                right: Box::new(Expr::Literal {
+                    value: Token::Integer {
+                        line: 0,
+                        literal: 1,
+                    }
+                }),
+            })
+        };
+        code_gen.compile(&stmt);
+        let constant_pool_size = read_constant_pool_size(code_gen.retrieve_constant_pool_size());
+        assert_eq!(constant_pool_size, 10); // 5 per int constant * 2
+        let mut constant_pool = VecDeque::from(code_gen.retrieve_constant_pool());
+        let first_tag = Tag::from(constant_pool.pop_front().unwrap());
+        assert_eq!(first_tag, Tag::Integer);
+        let first_constant = pop_integer_constant(&mut constant_pool);
+        assert_eq!(first_constant, 2);
+        let second_tag = Tag::from(constant_pool.pop_front().unwrap());
+        assert_eq!(second_tag, Tag::Integer);
+        let second_constant = pop_integer_constant(&mut constant_pool);
+        assert_eq!(second_constant, 1);
+        let mut instructions = VecDeque::from(code_gen.retrieve_bytecode());
+        let first_const_instr = Opcode::from(instructions.pop_front().unwrap());
+        assert_eq!(first_const_instr, Opcode::Constant);
+        let first_idx = pop_constant_pool_index(&mut instructions);
+        assert_eq!(first_idx, 0);
+        let second_const_instr = Opcode::from(instructions.pop_front().unwrap());
+        assert_eq!(second_const_instr, Opcode::Constant);
+        let second_idx = pop_constant_pool_index(&mut instructions);
+        assert_eq!(second_idx, 5);
+        let add_instr = Opcode::from(instructions.pop_front().unwrap());
+        assert_eq!(add_instr, Opcode::Sub);
+        let pop_instr = Opcode::from(instructions.pop_front().unwrap());
+        assert_eq!(pop_instr, Opcode::Pop);
+    }
 }
 
