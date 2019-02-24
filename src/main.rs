@@ -116,10 +116,12 @@ fn exec_input(verbose: bool, pretty_print: bool, input: &str) {
     // TODO determine the actual filename
     let stdout = stdout();
     let stderr = stderr();
+    let mut stdout_locked = stdout.lock();
+    let mut stderr_locked = stderr.lock();
     let bytecode = fs::read("tmp.durb").unwrap();
     let mut vm = match VM::init(bytecode,
-                                stdout.lock(),
-                                stderr.lock()) {
+                                &mut stdout_locked,
+                                &mut stderr_locked) {
         Ok(vm) => vm,
         Err(e) => {
             println!("{:?}", e);
