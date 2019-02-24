@@ -56,20 +56,20 @@ impl From<Error> for RuntimeError {
     }
 }
 
-#[derive(Default)]
-pub struct VM<Stdout: Write, Stderr: Write> {
+pub struct VM<'a, Stdout: Write, Stderr: Write> {
     had_exec_error: bool,
     constant_pool_size: ConstantPoolIdx,
     constant_pool: Vec<Bytecode>,
     instructions: Vec<Bytecode>,
     pc: usize,
     stack: Vec<RuntimeObject>,
-    stdout: Stdout,
-    stderr: Stderr,
+    stdout: &'a mut Stdout,
+    stderr: &'a mut Stderr,
 }
 
-impl<Stdout: Write, Stderr: Write> VM<Stdout, Stderr> {
-    pub fn init(input: Vec<u8>, stdout: Stdout, stderr: Stderr) -> Result<VM<Stdout, Stderr>, StartupError> {
+impl<'a, Stdout: Write, Stderr: Write> VM<'a, Stdout, Stderr> {
+    pub fn init(input: Vec<u8>, stdout: &'a mut Stdout,
+                stderr: &'a mut Stderr) -> Result<VM<'a, Stdout, Stderr>, StartupError> {
         let mut input_queue = VecDeque::from(input);
         let magic_number = input_queue.pop_front();
         match magic_number {
@@ -252,13 +252,15 @@ impl<Stdout: Write, Stderr: Write> VM<Stdout, Stderr> {
 #[cfg(test)]
 mod tests {
     use super::{StartupError, VM};
+    use bytecode::{Opcode, Tag};
+    use std::io::Write;
 
     #[test]
     fn test_missing_magic_number() {
         let input = Vec::new();
-        let stdout = Vec::new();
-        let stderr = Vec::new();
-        let err = VM::init(input, stdout, stderr);
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let err = VM::init(input, &mut stdout, &mut stderr);
         match err {
             Err(e) => {
                 match e {
@@ -274,9 +276,9 @@ mod tests {
     fn test_invalid_magic_number() {
         let invalid = 0x2B;
         let input = vec!(invalid);
-        let stdout = Vec::new();
-        let stderr = Vec::new();
-        let err = VM::init(input, stdout, stderr);
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let err = VM::init(input, &mut stdout, &mut stderr);
         match err {
             Err(e) => {
                 match e {
@@ -293,9 +295,9 @@ mod tests {
     #[test]
     fn test_missing_constant_pool_size() {
         let input = vec!(0x2A);
-        let stdout = Vec::new();
-        let stderr = Vec::new();
-        let err = VM::init(input, stdout, stderr);
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let err = VM::init(input, &mut stdout, &mut stderr);
         match err {
             Err(e) => {
                 match e {
@@ -310,9 +312,9 @@ mod tests {
     #[test]
     fn test_invalid_constant_pool_size() {
         let input = vec!(0x2A, 0x00);
-        let stdout = Vec::new();
-        let stderr = Vec::new();
-        let err = VM::init(input, stdout, stderr);
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let err = VM::init(input, &mut stdout, &mut stderr);
         match err {
             Err(e) => {
                 match e {
@@ -327,14 +329,84 @@ mod tests {
     #[test]
     fn test_correct_vm_init() {
         let input = vec!(0x2A, 0x00, 0x05, 0x01, 0x00, 0x00, 0x00, 0x00);
-        let stdout = Vec::new();
-        let stderr = Vec::new();
-        let err = VM::init(input, stdout, stderr);
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let err = VM::init(input, &mut stdout, &mut stderr);
         match err {
             Ok(vm) => {
                 assert!(!vm.had_error());
             }
             _ => panic!()
         }
+    }
+
+    #[test]
+    fn test_simple_add_two_ints() {
+        let mut input = vec!(0x2A, 0x00, 0x0A);
+        input.push(Tag::Integer as u8);
+        input.push(0x00);
+        input.push(0x00);
+        input.push(0x00);
+        input.push(0x02);
+        input.push(Tag::Integer as u8);
+        input.push(0x00);
+        input.push(0x00);
+        input.push(0x00);
+        input.push(0x01);
+        input.push(Opcode::Constant as u8);
+        input.push(0x00);
+        input.push(0x00);
+        input.push(Opcode::Constant as u8);
+        input.push(0x00);
+        input.push(0x05);
+        input.push(Opcode::Add as u8);
+        input.push(Opcode::Print as u8);
+        input.push(Opcode::Halt as u8);
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        {
+            let mut vm = VM::init(input, &mut stdout, &mut stderr).unwrap();
+            vm.run();
+            assert!(!vm.had_error());
+        }
+        let mut expected_output = Vec::new();
+        writeln!(&mut expected_output, "3").unwrap();
+        assert_eq!(String::from_utf8(stdout).unwrap(), String::from_utf8(expected_output).unwrap());
+        assert!(stderr.is_empty());
+    }
+
+    #[test]
+    fn test_simple_sub_two_ints() {
+        let mut input = vec!(0x2A, 0x00, 0x0A);
+        input.push(Tag::Integer as u8);
+        input.push(0x00);
+        input.push(0x00);
+        input.push(0x00);
+        input.push(0x02);
+        input.push(Tag::Integer as u8);
+        input.push(0x00);
+        input.push(0x00);
+        input.push(0x00);
+        input.push(0x01);
+        input.push(Opcode::Constant as u8);
+        input.push(0x00);
+        input.push(0x00);
+        input.push(Opcode::Constant as u8);
+        input.push(0x00);
+        input.push(0x05);
+        input.push(Opcode::Sub as u8);
+        input.push(Opcode::Print as u8);
+        input.push(Opcode::Halt as u8);
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        {
+            let mut vm = VM::init(input, &mut stdout, &mut stderr).unwrap();
+            vm.run();
+            assert!(!vm.had_error());
+        }
+        let mut expected_output = Vec::new();
+        writeln!(&mut expected_output, "1").unwrap();
+        assert_eq!(String::from_utf8(stdout).unwrap(), String::from_utf8(expected_output).unwrap());
+        assert!(stderr.is_empty());
     }
 }

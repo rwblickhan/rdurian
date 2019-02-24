@@ -175,7 +175,7 @@ mod tests {
     #[test]
     fn test_compile_add_two_int_literals() {
         let mut code_gen = CodeGenerator::default();
-        let mut stmt = Stmt::Expr {
+        let stmt = Stmt::Expr {
             expr: Box::new(Expr::Binary {
                 left: Box::new(Expr::Literal {
                     value: Token::Integer {
@@ -222,7 +222,7 @@ mod tests {
     #[test]
     fn test_compile_sub_two_int_literals() {
         let mut code_gen = CodeGenerator::default();
-        let mut stmt = Stmt::Expr {
+        let stmt = Stmt::Expr {
             expr: Box::new(Expr::Binary {
                 left: Box::new(Expr::Literal {
                     value: Token::Integer {
