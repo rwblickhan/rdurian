@@ -1,7 +1,7 @@
 pub type Bytecode = u8;
 pub type ConstantPoolIdx = u16;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Opcode {
     Nop = 0x00,
     Pop = 0x01,
@@ -35,7 +35,7 @@ impl From<u8> for Opcode {
 }
 
 // tag for constant pool
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Tag {
     Nil = 0x00,
     Integer = 0x01,
