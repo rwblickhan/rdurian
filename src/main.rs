@@ -101,16 +101,15 @@ fn exec_input(verbose: bool, pretty_print: bool, input: &str) {
         std::process::exit(1);
     }
     let mut code_gen = CodeGenerator::default();
-    let mut iter = stmts.iter();
-    while let Some(stmt) = iter.next() {
-        code_gen.compile(stmt);
+    for stmt in stmts {
+        code_gen.compile(&stmt);
     }
     let constants = code_gen.retrieve_constant_pool();
     let out = code_gen.retrieve_bytecode();
     // TODO determine the actual filename
     let mut bytecode_file = File::create("tmp.durb").unwrap();
-    bytecode_file.write(&[0x2A]).unwrap();
-    bytecode_file.write(code_gen.retrieve_constant_pool_size().as_slice()).unwrap();
+    bytecode_file.write_all(&[0x2A]).unwrap();
+    bytecode_file.write_all(code_gen.retrieve_constant_pool_size().as_slice()).unwrap();
     bytecode_file.write_all(constants.as_slice()).unwrap();
     bytecode_file.write_all(out.as_slice()).unwrap();
     // TODO determine the actual filename

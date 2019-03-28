@@ -53,7 +53,7 @@ impl From<u8> for Tag {
             0x02 => Tag::Float,
             0x03 => Tag::String,
             0x04 => Tag::Function,
-            _ => Tag::Error
+            _ => Tag::Error,
         }
     }
 }

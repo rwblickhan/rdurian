@@ -133,21 +133,21 @@ impl<'a, Stdout: Write, Stderr: Write> VM<'a, Stdout, Stderr> {
     }
 
     fn nop(&mut self) {
-        self.pc = self.pc + 1;
+        self.pc += 1;
     }
 
     fn pop(&mut self) {
-        self.pc = self.pc + 1;
+        self.pc += 1;
         self.stack.pop();
     }
 
     fn constant(&mut self) -> Result<(), RuntimeError> {
-        self.pc = self.pc + 1;
+        self.pc += 1;
         let idx = Cursor::new({
             let mut tmp = Vec::new();
             for _i in 0..2 {
                 tmp.push(self.instructions[self.pc]);
-                self.pc = self.pc + 1;
+                self.pc += 1;
             }
             tmp
         }).read_u16::<BigEndian>()?;
@@ -168,7 +168,7 @@ impl<'a, Stdout: Write, Stderr: Write> VM<'a, Stdout, Stderr> {
     }
 
     fn add(&mut self) -> Result<(), RuntimeError> {
-        self.pc = self.pc + 1;
+        self.pc += 1;
         let right = match self.stack.pop() {
             Some(val) => val,
             None => return Err(RuntimeError::StackError),
@@ -197,7 +197,7 @@ impl<'a, Stdout: Write, Stderr: Write> VM<'a, Stdout, Stderr> {
     }
 
     fn sub(&mut self) -> Result<(), RuntimeError> {
-        self.pc = self.pc + 1;
+        self.pc += 1;
         let right = match self.stack.pop() {
             Some(val) => val,
             None => return Err(RuntimeError::StackError),
@@ -226,7 +226,7 @@ impl<'a, Stdout: Write, Stderr: Write> VM<'a, Stdout, Stderr> {
     }
 
     fn print(&mut self) -> Result<(), RuntimeError> {
-        self.pc = self.pc + 1;
+        self.pc += 1;
         let obj = match self.stack.pop() {
             Some(val) => val,
             None => return Err(RuntimeError::StackError),
@@ -236,7 +236,7 @@ impl<'a, Stdout: Write, Stderr: Write> VM<'a, Stdout, Stderr> {
     }
 
     fn err(&mut self) -> Result<(), RuntimeError> {
-        self.pc = self.pc + 1;
+        self.pc += 1;
         let obj = match self.stack.pop() {
             Some(val) => val,
             None => return Err(RuntimeError::StackError),

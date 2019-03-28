@@ -66,7 +66,7 @@ impl CodeGenerator {
                         lit_as_bytes.write_i32::<BigEndian>(*literal).unwrap();
                         self.constant_pool.push(Tag::Integer as u8);
                         self.constant_pool.append(&mut lit_as_bytes);
-                        self.curr_constant_idx = self.curr_constant_idx + 5;
+                        self.curr_constant_idx += 5;
                     }
                     _ => {} // TODO
                 }
