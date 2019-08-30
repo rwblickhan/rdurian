@@ -6,7 +6,7 @@ pub fn pretty_print_stmt(stmt: &Stmt) -> String {
         Stmt::Block { ref stmts } => {
             let mut buffer = String::new();
             writeln!(&mut buffer, "{{").unwrap();
-            let mut iter = stmts.iter();
+            let iter = stmts.iter();
             for stmt in iter {
                 writeln!(&mut buffer, "    {}", pretty_print_stmt(&stmt)).unwrap();
             }
@@ -39,7 +39,7 @@ pub fn pretty_print_stmt(stmt: &Stmt) -> String {
             let mut buffer = String::new();
             write!(&mut buffer, "declare function {} with params ",
                    pretty_print_expr(ident)).unwrap();
-            let mut iter = params.iter();
+            let iter = params.iter();
             for expr in iter {
                 write!(&mut buffer, "{}, ", pretty_print_expr(expr)).unwrap();
             }
@@ -66,7 +66,7 @@ pub fn pretty_print_expr(expr: &Expr) -> String {
             let mut buffer = String::new();
             write!(&mut buffer, "(call function {} with args ",
                    pretty_print_expr(ident)).unwrap();
-            let mut iter = args.iter();
+            let iter = args.iter();
             for expr in iter {
                 write!(&mut buffer, "{}, ", pretty_print_expr(expr)).unwrap();
             }
@@ -78,7 +78,7 @@ pub fn pretty_print_expr(expr: &Expr) -> String {
             write!(&mut buffer, "(shell out to {}", command).unwrap();
             if let Some(args) = args {
                 write!(&mut buffer, " with args ").unwrap();
-                let mut iter = args.iter();
+                let iter = args.iter();
                 for expr in iter {
                     write!(&mut buffer, "{}, ", pretty_print_expr(expr)).unwrap();
                 }
@@ -89,7 +89,7 @@ pub fn pretty_print_expr(expr: &Expr) -> String {
         Expr::Pipeline { ref commands } => {
             let mut buffer = String::new();
             write!(&mut buffer, "(").unwrap();
-            let mut iter = commands.iter();
+            let iter = commands.iter();
             for command in iter {
                 write!(&mut buffer, "{} | ", pretty_print_expr(command)).unwrap();
             }

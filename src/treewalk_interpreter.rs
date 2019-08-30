@@ -230,7 +230,7 @@ impl Interpreter {
             Stmt::Scan { ident, .. } => {
                 let lval = self.interp_lval(ident)?;
                 let stdin = stdin();
-                let mut handle = stdin.lock();
+                let handle = stdin.lock();
                 let input = handle.lines().next().unwrap()?;
                 self.curr_scope.borrow_mut().assign(lval, &RuntimeObject::String(input))?;
                 Ok(None)
@@ -325,7 +325,7 @@ impl Interpreter {
             Expr::Grouping { expr } => self.interp_expr(expr),
             Expr::FnCall { ident, args } => {
                 let ident_str = self.interp_lval(ident)?;
-                let mut func_obj = self.curr_scope.borrow().get(ident_str)?;
+                let func_obj = self.curr_scope.borrow().get(ident_str)?;
                 let mut arg_queue = VecDeque::new();
                 for arg in args {
                     arg_queue.push_front(self.interp_expr(arg)?);
