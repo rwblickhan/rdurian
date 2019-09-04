@@ -50,8 +50,33 @@ impl CodeGenerator {
                 out.append(&mut self.emit_expr_bytecode(left));
                 out.append(&mut self.emit_expr_bytecode(right));
                 match operator {
+                    Token::And(_) => out.push(Opcode::LogAnd as u8),
+                    Token::Or(_) => out.push(Opcode::LogOr as u8),
+                    Token::Ampersand(_) => out.push(Opcode::Concat as u8),
                     Token::Plus(_) => out.push(Opcode::Add as u8),
                     Token::Minus(_) => out.push(Opcode::Sub as u8),
+                    Token::Star(_) => out.push(Opcode::Mul as u8),
+                    Token::Slash(_) => out.push(Opcode::Div as u8),
+                    Token::Modulo(_) => out.push(Opcode::Mod as u8),
+                    Token::Caret(_) => out.push(Opcode::Exp as u8),
+                    Token::EqualEqual(_) => out.push(Opcode::Eq as u8),
+                    Token::BangEqual(_) => out.push(Opcode::NotEq as u8),
+                    Token::GreaterEqual(_) => out.push(Opcode::GreaterEq as u8),
+                    Token::Greater(_) => out.push(Opcode::Greater as u8),
+                    Token::LesserEqual(_) => out.push(Opcode::LesserEq as u8),
+                    Token::Lesser(_) => out.push(Opcode::Lesser as u8),
+                    _ => {} // TODO
+                }
+            }
+            Expr::Unary { operator, right } => {
+                out.append(&mut self.emit_expr_bytecode(right));
+                match operator {
+                    Token::Plus(_) => out.push(Opcode::Numberify as u8),
+                    Token::Minus(_) => out.push(Opcode::Neg as u8),
+                    Token::Ampersand(_) => out.push(Opcode::Stringify as u8),
+                    Token::Bang(_) => out.push(Opcode::LogNeg as u8),
+                    Token::Slash(_) => out.push(Opcode::Sqrt as u8),
+                    Token::Dollar(_) => out.push(Opcode::Env as u8),
                     _ => {} // TODO
                 }
             }

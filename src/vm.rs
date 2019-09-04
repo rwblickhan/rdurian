@@ -122,6 +122,18 @@ impl<'a, Stdout: Write, Stderr: Write> VM<'a, Stdout, Stderr> {
                 Opcode::Sub => match self.sub() {
                     _ => () // TODO
                 }
+                Opcode::Mul => match self.mul() {
+                    _ => () // TODO
+                }
+                Opcode::Div => match self.div() {
+                    _ => () // TODO
+                }
+                Opcode::Mod => match self.modulo() {
+                    _ => () // TODO
+                }
+                Opcode::Exp => match self.modulo() {
+                    _ => () // TODO
+                }
                 Opcode::Print => match self.print() {
                     _ => () // TODO
                 }
@@ -223,6 +235,89 @@ impl<'a, Stdout: Write, Stderr: Write> VM<'a, Stdout, Stderr> {
             }
             _ => Err(RuntimeError::InvalidOperand("Left operand to addition not numeric type".to_string())),
         }
+    }
+
+    fn mul(&mut self) -> Result<(), RuntimeError> {
+        self.pc += 1;
+        let right = match self.stack.pop() {
+            Some(val) => val,
+            None => return Err(RuntimeError::StackError),
+        };
+        let left = match self.stack.pop() {
+            Some(val) => val,
+            None => return Err(RuntimeError::StackError),
+        };
+        match left {
+            RuntimeObject::Integer(left_int) => {
+                match right {
+                    RuntimeObject::Integer(right_int) => Ok(self.stack.push(RuntimeObject::Integer(left_int * right_int))),
+                    RuntimeObject::Float(right_float) => Ok(self.stack.push(RuntimeObject::Float(f64::from(left_int) * right_float))),
+                    _ => Err(RuntimeError::InvalidOperand("Right operand to addition not numeric type".to_string()))
+                }
+            }
+            RuntimeObject::Float(left_float) => {
+                match right {
+                    RuntimeObject::Integer(right_int) => Ok(self.stack.push(RuntimeObject::Float(left_float * f64::from(right_int)))),
+                    RuntimeObject::Float(right_float) => Ok(self.stack.push(RuntimeObject::Float(left_float * right_float))),
+                    _ => Err(RuntimeError::InvalidOperand("Right operand to addition not numeric type".to_string()))
+                }
+            }
+            _ => Err(RuntimeError::InvalidOperand("Left operand to addition not numeric type".to_string())),
+        }
+    }
+
+    fn div(&mut self) -> Result<(), RuntimeError> {
+        self.pc += 1;
+        let right = match self.stack.pop() {
+            Some(val) => val,
+            None => return Err(RuntimeError::StackError),
+        };
+        let left = match self.stack.pop() {
+            Some(val) => val,
+            None => return Err(RuntimeError::StackError),
+        };
+        match left {
+            RuntimeObject::Integer(left_int) => {
+                match right {
+                    RuntimeObject::Integer(right_int) => Ok(self.stack.push(RuntimeObject::Integer(left_int / right_int))),
+                    RuntimeObject::Float(right_float) => Ok(self.stack.push(RuntimeObject::Float(f64::from(left_int) / right_float))),
+                    _ => Err(RuntimeError::InvalidOperand("Right operand to addition not numeric type".to_string()))
+                }
+            }
+            RuntimeObject::Float(left_float) => {
+                match right {
+                    RuntimeObject::Integer(right_int) => Ok(self.stack.push(RuntimeObject::Float(left_float / f64::from(right_int)))),
+                    RuntimeObject::Float(right_float) => Ok(self.stack.push(RuntimeObject::Float(left_float / right_float))),
+                    _ => Err(RuntimeError::InvalidOperand("Right operand to addition not numeric type".to_string()))
+                }
+            }
+            _ => Err(RuntimeError::InvalidOperand("Left operand to addition not numeric type".to_string())),
+        }
+    }
+
+    fn modulo(&mut self) -> Result<(), RuntimeError> {
+        self.pc += 1;
+        let right = match self.stack.pop() {
+            Some(val) => val,
+            None => return Err(RuntimeError::StackError),
+        };
+        let left = match self.stack.pop() {
+            Some(val) => val,
+            None => return Err(RuntimeError::StackError),
+        };
+        match left {
+            RuntimeObject::Integer(left_int) => {
+                match right {
+                    RuntimeObject::Integer(right_int) => Ok(self.stack.push(RuntimeObject::Integer((left_int % right_int + right_int) % right_int))),
+                    _ => Err(RuntimeError::InvalidOperand("Right operand to addition not integer".to_string()))
+                }
+            }
+            _ => Err(RuntimeError::InvalidOperand("Left operand to addition not integer".to_string())),
+        }
+    }
+
+    fn exp(&mut self) -> Result<(), RuntimeError> {
+        // TODO
     }
 
     fn print(&mut self) -> Result<(), RuntimeError> {
